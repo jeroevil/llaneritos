@@ -5,6 +5,7 @@ using UnityEngine.Playables;
 using UnityEngine.Events;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.AI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -63,22 +64,53 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("El GameObject del Silbon en escena (silvon unity)")]
     public GameObject silbonEnemigo;
 
-    [Header("Puntos de Acecho y Persecucion")]
-    [Tooltip("Lugar donde aparecera el Silbon en el primer acecho (ej. arboles lejanos)")]
-    public Transform puntoAcecho1;
+    [Header("Acecho Dinamico Progresivo")]
+    [Tooltip("A partir de que pez empieza a acechar el Silbon (por defecto 4). Antes de este pez habra calma.")]
+    public int pezInicioAcecho = 4;
 
-    [Tooltip("Lugar donde aparecera el Silbon en el segundo acecho (ej. orilla mas cerca)")]
-    public Transform puntoAcecho2;
+    [Tooltip("Lista de puntos de acecho creados por ti donde el Silbon puede asomarse.")]
+    public List<Transform> puntosDeAcecho = new List<Transform>();
 
+    [Tooltip("Objeto padre que contiene los puntos de acecho. Si lo asignas, sus hijos se agregan automaticamente a la lista.")]
+    public Transform contenedorPuntosAcecho;
+
+    [Header("Prioridad de Campo de Vision (FOV)")]
+    [Tooltip("Prioriza puntos que esten dentro del campo visual del jugador para que siempre vea que lo stalkea.")]
+    public bool priorizarCampoDeVision = true;
+
+    [Tooltip("Angulo maximo en grados desde el centro de la mirada del jugador para considerar un punto 'en vision' (75° cubre un FOV amplio de 150°).")]
+    [Range(30f, 90f)]
+    public float anguloVisionMaximo = 75f;
+
+    [Header("Duracion del Vistazo Progresivo")]
+    [Tooltip("Segundos que se deja ver en el primer acecho (pez 4) - vistazo fugaz donde dudas de si lo viste.")]
+    public float duracionVistazoMinimo = 1.3f;
+
+    [Tooltip("Segundos que se deja ver en el ultimo acecho antes de la persecucion (pez 9) - se queda mirandote fijamente aterrador.")]
+    public float duracionVistazoMaximo = 4.5f;
+
+    [Header("Punto de Persecucion Final (Pez 10)")]
     [Tooltip("Lugar donde aparecera el Silbon para arrancar a correr al 100%")]
     public Transform puntoInicioPersecucion;
 
-    [Tooltip("La camara del jugador hacia donde el Silbon debe mirar")]
+    [Tooltip("La camara del jugador hacia donde el Silbon debe mirar fijamente")]
     public Transform jugadorOcular;
 
-    [Header("Configuracion del Acecho Fugaz")]
-    [Tooltip("Cuantos segundos se queda visible antes de desaparecer para que dudes si lo viste")]
-    public float duracionVistazoFugaz = 2.5f;
+    [Header("Persecucion con NavMesh (Pez 10)")]
+    [Tooltip("El componente NavMeshAgent del Silbon. Si esta vacio, se busca automaticamente en silbonEnemigo.")]
+    public NavMeshAgent navMeshAgentSilbon;
+
+    [Tooltip("Velocidad a la que el Silbon persigue al jugador tras el apagon del pez 10.")]
+    public float velocidadPersecucion = 4.2f;
+
+    [Tooltip("Distancia en metros para considerar que el Silbon atrapo al jugador.")]
+    public float distanciaCapturaJugador = 1.3f;
+
+    [Tooltip("Evento que se dispara cuando el Silbon alcanza al jugador (Jumpscare / Game Over).")]
+    public UnityEvent OnJugadorAtrapado;
+
+    [HideInInspector] public Transform puntoAcecho1;
+    [HideInInspector] public Transform puntoAcecho2;
 
     [Header("Progreso de Pesca")]
     [Tooltip("Total de peces necesarios para llenar la barra al 100%")]
@@ -109,6 +141,8 @@ public class FishingSilbonDirector : MonoBehaviour
     private float _currentTerrorWeight = 0f;
     private Coroutine _rutinaVistazo;
     private Coroutine _rutinaClimax;
+    private Coroutine _rutinaPersecucion;
+    private Transform _ultimoPuntoAcecho;
 
     private void Awake()
     {
@@ -179,6 +213,13 @@ public class FishingSilbonDirector : MonoBehaviour
             silbonEnemigo = BuscarObjetoEnEscena("silvon unity") ?? BuscarObjetoEnEscena("silbon");
             if (silbonEnemigo != null)
                 Debug.Log("[Pesca] Encontrado automáticamente el objeto Silbón: " + silbonEnemigo.name);
+        }
+
+        if (navMeshAgentSilbon == null && silbonEnemigo != null)
+        {
+            navMeshAgentSilbon = silbonEnemigo.GetComponent<NavMeshAgent>();
+            if (navMeshAgentSilbon != null)
+                Debug.Log("[Pesca] Encontrado automáticamente NavMeshAgent en: " + silbonEnemigo.name);
         }
 
         // 4. Skyboxes
@@ -276,50 +317,84 @@ public class FishingSilbonDirector : MonoBehaviour
 
     private void AutoBuscarOInstanciarPuntos()
     {
-        if (puntoAcecho1 == null)
+        // 1. Sincronizar puntos desde contenedor si fue asignado
+        if (contenedorPuntosAcecho != null)
         {
-            var go = BuscarObjetoEnEscena("PuntoAcecho1") ?? BuscarObjetoEnEscena("Punto_Acecho_1");
-            if (go != null) puntoAcecho1 = go.transform;
+            for (int i = 0; i < contenedorPuntosAcecho.childCount; i++)
+            {
+                var hijo = contenedorPuntosAcecho.GetChild(i);
+                if (!puntosDeAcecho.Contains(hijo))
+                    puntosDeAcecho.Add(hijo);
+            }
+        }
+        else
+        {
+            // Intentar encontrar un contenedor con nombres comunes en escena
+            var goContenedor = BuscarObjetoEnEscena("Puntos Acecho") ?? BuscarObjetoEnEscena("Puntos Silbon") ?? BuscarObjetoEnEscena("PuntosAcecho") ?? BuscarObjetoEnEscena("Spawnpoints Silbon") ?? BuscarObjetoEnEscena("Puntos de Acecho");
+            if (goContenedor != null)
+            {
+                contenedorPuntosAcecho = goContenedor.transform;
+                for (int i = 0; i < contenedorPuntosAcecho.childCount; i++)
+                {
+                    var hijo = contenedorPuntosAcecho.GetChild(i);
+                    if (!puntosDeAcecho.Contains(hijo))
+                        puntosDeAcecho.Add(hijo);
+                }
+                Debug.Log($"[Silbon] Encontrado contenedor '{goContenedor.name}' con {contenedorPuntosAcecho.childCount} puntos de acecho.");
+            }
         }
 
-        if (puntoAcecho2 == null)
+        // Limpiar nulos
+        puntosDeAcecho.RemoveAll(item => item == null);
+
+        // Si aún no hay puntos asignados en la lista, buscar puntos sueltos o generarlos de reserva
+        if (puntosDeAcecho.Count == 0)
         {
-            var go = BuscarObjetoEnEscena("PuntoAcecho2") ?? BuscarObjetoEnEscena("Punto_Acecho_2");
-            if (go != null) puntoAcecho2 = go.transform;
+            Vector3 basePos = jugadorOcular != null ? jugadorOcular.position : Vector3.zero;
+            Vector3 forward = jugadorOcular != null ? jugadorOcular.forward : Vector3.forward;
+            Vector3 right = jugadorOcular != null ? jugadorOcular.right : Vector3.right;
+            forward.y = 0; right.y = 0;
+            forward.Normalize(); right.Normalize();
+
+            // Puntos de fallback a diferentes distancias y ángulos
+            GameObject rootFallback = new GameObject("Puntos Silbon (Auto-Generados)");
+            contenedorPuntosAcecho = rootFallback.transform;
+
+            Vector3[] offsets = new Vector3[]
+            {
+                (forward * 36f) + (right * 16f),   // Lejano derecha (pez 4)
+                (forward * 32f) - (right * 18f),   // Lejano izquierda (pez 5)
+                (forward * 22f) + (right * 10f),   // Medio derecha (pez 6)
+                (forward * 18f) - (right * 12f),   // Medio izquierda (pez 7)
+                (forward * 11f) + (right * 5f),    // Cercano derecha (pez 8)
+                (forward * 7f) - (right * 3f)      // Muy cercano (pez 9)
+            };
+
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                GameObject p = new GameObject($"Punto_Acecho_{i + 1}");
+                p.transform.SetParent(rootFallback.transform);
+                p.transform.position = basePos + offsets[i];
+                puntosDeAcecho.Add(p.transform);
+            }
+
+            Debug.Log("[Silbon] Se generaron puntos de acecho de respaldo automáticos.");
         }
 
+        // Punto de persecución para el 100%
         if (puntoInicioPersecucion == null)
         {
             var go = BuscarObjetoEnEscena("PuntoInicioPersecucion") ?? BuscarObjetoEnEscena("Punto_Persecucion");
             if (go != null) puntoInicioPersecucion = go.transform;
-        }
-
-        // Si no existen en la escena, crearlos con posiciones relativas al jugador
-        Vector3 basePos = jugadorOcular != null ? jugadorOcular.position : Vector3.zero;
-        Vector3 forward = jugadorOcular != null ? jugadorOcular.forward : Vector3.forward;
-        Vector3 right = jugadorOcular != null ? jugadorOcular.right : Vector3.right;
-        forward.y = 0; right.y = 0;
-        forward.Normalize(); right.Normalize();
-
-        if (puntoAcecho1 == null)
-        {
-            GameObject p1 = new GameObject("PuntoAcecho1");
-            p1.transform.position = basePos + (forward * 22f) + (right * 14f);
-            puntoAcecho1 = p1.transform;
-        }
-
-        if (puntoAcecho2 == null)
-        {
-            GameObject p2 = new GameObject("PuntoAcecho2");
-            p2.transform.position = basePos + (forward * 12f) - (right * 8f);
-            puntoAcecho2 = p2.transform;
-        }
-
-        if (puntoInicioPersecucion == null)
-        {
-            GameObject pChase = new GameObject("PuntoInicioPersecucion");
-            pChase.transform.position = basePos + (forward * 16f);
-            puntoInicioPersecucion = pChase.transform;
+            else
+            {
+                Vector3 basePos = jugadorOcular != null ? jugadorOcular.position : Vector3.zero;
+                Vector3 forward = jugadorOcular != null ? jugadorOcular.forward : Vector3.forward;
+                forward.y = 0; forward.Normalize();
+                GameObject pChase = new GameObject("PuntoInicioPersecucion");
+                pChase.transform.position = basePos + (forward * 14f);
+                puntoInicioPersecucion = pChase.transform;
+            }
         }
     }
 
@@ -521,6 +596,15 @@ public class FishingSilbonDirector : MonoBehaviour
             }
 
             silbonEnemigo.SetActive(true);
+
+            // Preparar NavMeshAgent para la persecución
+            if (navMeshAgentSilbon != null)
+            {
+                navMeshAgentSilbon.enabled = true;
+                navMeshAgentSilbon.speed = velocidadPersecucion;
+                if (puntoInicioPersecucion != null)
+                    navMeshAgentSilbon.Warp(puntoInicioPersecucion.position);
+            }
         }
 
         // Si la Timeline maneja pistas de animacion, posicionarla en el clímax
@@ -539,7 +623,41 @@ public class FishingSilbonDirector : MonoBehaviour
         // 4. Apertura de ojos: la vista regresa y el mundo ya es la pesadilla roja
         yield return StartCoroutine(RutinaFundidoBlink(duracionAperturaOjos, 1.0f, 0.0f));
 
-        Debug.Log("[Silbon] ¡Ojos abiertos! La pesadilla ha comenzado sin cortes bruscos.");
+        Debug.Log("[Silbon] ¡Ojos abiertos! La persecución con NavMeshAgent ha comenzado.");
+
+        // Iniciar persecución continua tras el jugador
+        if (_rutinaPersecucion != null)
+            StopCoroutine(_rutinaPersecucion);
+        _rutinaPersecucion = StartCoroutine(RutinaPersecucionJugador());
+    }
+
+    /// <summary>
+    /// Bucle de persecucion en tiempo real: el Silbon sigue la posicion del jugador con su NavMeshAgent
+    /// esquivando arboles, rocas y agua. Si alcanza al jugador, dispara el evento de captura.
+    /// </summary>
+    private IEnumerator RutinaPersecucionJugador()
+    {
+        while (_chaseTriggered && silbonEnemigo != null)
+        {
+            if (jugadorOcular != null && navMeshAgentSilbon != null && navMeshAgentSilbon.isActiveAndEnabled)
+            {
+                if (navMeshAgentSilbon.isOnNavMesh)
+                {
+                    navMeshAgentSilbon.isStopped = false;
+                    navMeshAgentSilbon.SetDestination(jugadorOcular.position);
+
+                    float dist = Vector3.Distance(silbonEnemigo.transform.position, jugadorOcular.position);
+                    if (dist <= distanciaCapturaJugador)
+                    {
+                        Debug.Log("[Silbon] ¡El Silbón te ha atrapado! (Jumpscare)");
+                        OnJugadorAtrapado?.Invoke();
+                        navMeshAgentSilbon.isStopped = true;
+                        yield break;
+                    }
+                }
+            }
+            yield return new WaitForSeconds(0.1f);
+        }
     }
 
     private IEnumerator RutinaFundidoBlink(float duracion, float pesoInicio, float pesoFin)
@@ -564,53 +682,207 @@ public class FishingSilbonDirector : MonoBehaviour
 
     private void CheckPhaseAndStalking(float progress)
     {
-        int newPhase = 1;
-
-        if (progress >= 0.33f && progress < 0.66f)
+        if (progress >= 1f)
         {
-            newPhase = 2; // Acecho 1 (lejos)
-            IniciarVistazoFugaz(puntoAcecho1);
-        }
-        else if (progress >= 0.66f && progress < 0.99f)
-        {
-            newPhase = 3; // Acecho 2 (medio/cerca)
-            IniciarVistazoFugaz(puntoAcecho2);
-        }
-        else if (progress < 0.33f)
-        {
-            newPhase = 1; // Calma total
-            if (silbonEnemigo != null && !_chaseTriggered)
-                silbonEnemigo.SetActive(false);
+            // Pez 10: persecución
+            return;
         }
 
-        if (newPhase != _currentPhase)
+        if (currentFishCount < pezInicioAcecho)
         {
-            _currentPhase = newPhase;
-            if (_currentPhase == 2)
+            // Fase de Calma (antes del pez 4)
+            if (_currentPhase != 1)
             {
-                Debug.Log("[Silbon] Vistazo 1: Silbon asomandose entre los arboles lejanos...");
-                OnPhase2Stalking?.Invoke();
-            }
-            else if (_currentPhase == 1)
-            {
+                _currentPhase = 1;
                 OnPhase1Calm?.Invoke();
             }
+
+            if (silbonEnemigo != null && !_chaseTriggered)
+                silbonEnemigo.SetActive(false);
+            return;
+        }
+
+        // Si llegamos aqui, currentFishCount >= pezInicioAcecho (peces 4 a 9)
+        if (_currentPhase != 2)
+        {
+            _currentPhase = 2;
+            Debug.Log($"[Silbon] ¡Fase de Acecho Iniciada! (Pez {currentFishCount}). El Silbón comienza a vigilarte desde las sombras.");
+            OnPhase2Stalking?.Invoke();
+        }
+
+        // 1. Normalizar avance del acecho de 0.0 (pez 4) a 1.0 (pez 9)
+        int pecesAcechoTotal = Mathf.Max(1, (totalFishNeeded - 1) - pezInicioAcecho);
+        float tAcecho = Mathf.Clamp01((float)(currentFishCount - pezInicioAcecho) / pecesAcechoTotal);
+
+        // 2. Calcular duracion progresiva del vistazo (aumenta con mas peces pescados)
+        float duracionVistazo = Mathf.Lerp(duracionVistazoMinimo, duracionVistazoMaximo, tAcecho);
+
+        // 3. Seleccionar el mejor punto de acecho (por proximidad dinamica y campo de vision)
+        Transform puntoElegido = SeleccionarMejorPuntoDeAcecho(tAcecho);
+
+        // 4. Iniciar vistazo fugaz
+        if (puntoElegido != null)
+        {
+            IniciarVistazoFugaz(puntoElegido, duracionVistazo);
         }
     }
 
-    private void IniciarVistazoFugaz(Transform punto)
+    private struct CandidatoPunto
+    {
+        public Transform transform;
+        public float distancia;
+        public bool enVision;
+        public float angulo;
+    }
+
+    /// <summary>
+    /// Selecciona el punto optimo segun el progreso del acecho (tAcecho: 0=lejano, 1=cercano),
+    /// priorizando puntos dentro del campo de vision del jugador (FOV) y evitando repeticiones inmediatas.
+    /// </summary>
+    public Transform SeleccionarMejorPuntoDeAcecho(float tAcecho)
+    {
+        if (puntosDeAcecho == null || puntosDeAcecho.Count == 0)
+            AutoBuscarOInstanciarPuntos();
+
+        puntosDeAcecho.RemoveAll(p => p == null);
+        if (puntosDeAcecho.Count == 0) return null;
+        if (puntosDeAcecho.Count == 1) return puntosDeAcecho[0];
+
+        Vector3 posJugador = jugadorOcular != null ? jugadorOcular.position : transform.position;
+        Vector3 fwdJugador = jugadorOcular != null ? jugadorOcular.forward : Vector3.forward;
+        fwdJugador.y = 0;
+        if (fwdJugador.sqrMagnitude > 0.001f) fwdJugador.Normalize();
+        else fwdJugador = Vector3.forward;
+
+        float distMinima = float.MaxValue;
+        float distMaxima = float.MinValue;
+
+        List<CandidatoPunto> todos = new List<CandidatoPunto>();
+        foreach (var p in puntosDeAcecho)
+        {
+            float dist = Vector3.Distance(p.position, posJugador);
+            Vector3 dir = (p.position - posJugador);
+            dir.y = 0;
+            if (dir.sqrMagnitude > 0.001f) dir.Normalize();
+
+            float angulo = Vector3.Angle(fwdJugador, dir);
+            bool enVision = angulo <= anguloVisionMaximo;
+
+            if (dist < distMinima) distMinima = dist;
+            if (dist > distMaxima) distMaxima = dist;
+
+            todos.Add(new CandidatoPunto { transform = p, distancia = dist, enVision = enVision, angulo = angulo });
+        }
+
+        // Distancia objetivo: a tAcecho = 0 (pez 4) queremos los más lejanos, a tAcecho = 1 (pez 9) queremos los más cercanos
+        float distObjetivo = Mathf.Lerp(distMaxima, distMinima, tAcecho);
+
+        // Filtrar puntos que están dentro del campo de visión del jugador
+        List<CandidatoPunto> candidatosEnVision = new List<CandidatoPunto>();
+        foreach (var c in todos)
+        {
+            if (c.enVision) candidatosEnVision.Add(c);
+        }
+
+        // Si hay puntos en el campo de visión, se priorizan estrictamente esos
+        List<CandidatoPunto> grupoElegible = (priorizarCampoDeVision && candidatosEnVision.Count > 0)
+            ? candidatosEnVision
+            : todos;
+
+        // Dentro del grupo elegible, encontrar el más cercano a distObjetivo
+        CandidatoPunto mejor = default;
+        float menorDiferencia = float.MaxValue;
+        bool encontrado = false;
+
+        foreach (var c in grupoElegible)
+        {
+            // Evitar repetir exactamente el mismo punto consecutivo si hay más opciones en el grupo
+            if (grupoElegible.Count > 1 && _ultimoPuntoAcecho != null && c.transform == _ultimoPuntoAcecho)
+                continue;
+
+            float diff = Mathf.Abs(c.distancia - distObjetivo);
+            if (diff < menorDiferencia)
+            {
+                menorDiferencia = diff;
+                mejor = c;
+                encontrado = true;
+            }
+        }
+
+        // Fallback por si todos eran el anterior
+        if (!encontrado)
+        {
+            menorDiferencia = float.MaxValue;
+            foreach (var c in grupoElegible)
+            {
+                float diff = Mathf.Abs(c.distancia - distObjetivo);
+                if (diff < menorDiferencia)
+                {
+                    menorDiferencia = diff;
+                    mejor = c;
+                    encontrado = true;
+                }
+            }
+        }
+
+        if (encontrado && mejor.transform != null)
+        {
+            _ultimoPuntoAcecho = mejor.transform;
+            Debug.Log($"[Silbon] Acecho Pez {currentFishCount}: Asomándose en '{mejor.transform.name}' a {mejor.distancia:F1}m (En visión: {mejor.enVision}, Ángulo: {mejor.angulo:F0}°) durante {duracionVistazoMinimo + (duracionVistazoMaximo - duracionVistazoMinimo) * tAcecho:F1}s.");
+            return mejor.transform;
+        }
+
+        return puntosDeAcecho[0];
+    }
+
+    private void IniciarVistazoFugaz(Transform punto, float tiempoVisible)
     {
         if (_chaseTriggered || punto == null) return;
 
         if (_rutinaVistazo != null)
             StopCoroutine(_rutinaVistazo);
 
-        _rutinaVistazo = StartCoroutine(RutinaVistazoFugaz(punto, duracionVistazoFugaz));
+        _rutinaVistazo = StartCoroutine(RutinaVistazoFugaz(punto, tiempoVisible));
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if (puntosDeAcecho == null || puntosDeAcecho.Count == 0) return;
+
+        Vector3 posJugador = jugadorOcular != null ? jugadorOcular.position : transform.position;
+
+        for (int i = 0; i < puntosDeAcecho.Count; i++)
+        {
+            var p = puntosDeAcecho[i];
+            if (p == null) continue;
+
+            float dist = Vector3.Distance(p.position, posJugador);
+
+            // Color gradiente: Amarillo verdoso (lejos) -> Rojo sangre (cerca)
+            Gizmos.color = Color.Lerp(Color.red, Color.yellow, Mathf.Clamp01(dist / 35f));
+            Gizmos.DrawWireSphere(p.position, 0.8f);
+            Gizmos.DrawLine(p.position, p.position + Vector3.up * 2.5f);
+
+            // Línea hacia el jugador
+            Gizmos.color = new Color(1f, 0.4f, 0f, 0.35f);
+            Gizmos.DrawLine(p.position, posJugador);
+        }
+
+        if (puntoInicioPersecucion != null)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(puntoInicioPersecucion.position, 1.5f);
+            Gizmos.DrawLine(puntoInicioPersecucion.position, puntoInicioPersecucion.position + Vector3.up * 3f);
+        }
     }
 
     private IEnumerator RutinaVistazoFugaz(Transform punto, float tiempoVisible)
     {
         if (silbonEnemigo == null) yield break;
+
+        // Desactivar temporalmente NavMeshAgent mientras solo se asoma en un punto estático
+        if (navMeshAgentSilbon != null && navMeshAgentSilbon.enabled)
+            navMeshAgentSilbon.enabled = false;
 
         silbonEnemigo.transform.position = punto.position;
         silbonEnemigo.transform.rotation = punto.rotation;
@@ -651,6 +923,16 @@ public class FishingSilbonDirector : MonoBehaviour
         if (_rutinaClimax != null)
             StopCoroutine(_rutinaClimax);
 
+        if (_rutinaPersecucion != null)
+            StopCoroutine(_rutinaPersecucion);
+
+        if (navMeshAgentSilbon != null)
+        {
+            if (navMeshAgentSilbon.isActiveAndEnabled && navMeshAgentSilbon.isOnNavMesh)
+                navMeshAgentSilbon.isStopped = true;
+            navMeshAgentSilbon.enabled = false;
+        }
+
         if (volumeBlink != null)
             volumeBlink.weight = 0f;
 
@@ -674,24 +956,5 @@ public class FishingSilbonDirector : MonoBehaviour
         }
 
         Debug.Log("[Pesca] Progreso y ambiente reiniciados a 0.");
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        if (puntoAcecho1 != null)
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(puntoAcecho1.position, 1.2f);
-        }
-        if (puntoAcecho2 != null)
-        {
-            Gizmos.color = new Color(1f, 0.5f, 0f);
-            Gizmos.DrawWireSphere(puntoAcecho2.position, 1.2f);
-        }
-        if (puntoInicioPersecucion != null)
-        {
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(puntoInicioPersecucion.position, 1.5f);
-        }
     }
 }
