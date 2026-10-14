@@ -96,6 +96,10 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("La camara del jugador hacia donde el Silbon debe mirar fijamente")]
     public Transform jugadorOcular;
 
+    [Header("Animaciones del Silbon (Mixamo)")]
+    [Tooltip("El componente Animator del Silbon. Si esta vacio, se busca automaticamente en silbonEnemigo.")]
+    public Animator animatorSilbon;
+
     [Header("Persecucion con NavMesh (Pez 10)")]
     [Tooltip("El componente NavMeshAgent del Silbon. Si esta vacio, se busca automaticamente en silbonEnemigo.")]
     public NavMeshAgent navMeshAgentSilbon;
@@ -220,6 +224,15 @@ public class FishingSilbonDirector : MonoBehaviour
             navMeshAgentSilbon = silbonEnemigo.GetComponent<NavMeshAgent>();
             if (navMeshAgentSilbon != null)
                 Debug.Log("[Pesca] Encontrado automáticamente NavMeshAgent en: " + silbonEnemigo.name);
+        }
+
+        if (animatorSilbon == null && silbonEnemigo != null)
+        {
+            animatorSilbon = silbonEnemigo.GetComponent<Animator>();
+            if (animatorSilbon == null)
+                animatorSilbon = silbonEnemigo.GetComponentInChildren<Animator>();
+            if (animatorSilbon != null)
+                Debug.Log("[Pesca] Encontrado automáticamente Animator en: " + silbonEnemigo.name);
         }
 
         // 4. Skyboxes
@@ -625,6 +638,22 @@ public class FishingSilbonDirector : MonoBehaviour
 
         Debug.Log("[Silbon] ¡Ojos abiertos! La persecución con NavMeshAgent ha comenzado.");
 
+        // Activar animacion de correr (Run) en el Animator
+        if (animatorSilbon == null && silbonEnemigo != null)
+        {
+            animatorSilbon = silbonEnemigo.GetComponent<Animator>() ?? silbonEnemigo.GetComponentInChildren<Animator>();
+        }
+
+        if (animatorSilbon != null)
+        {
+            animatorSilbon.enabled = true;
+            animatorSilbon.SetBool("Acechando", false);
+            animatorSilbon.SetBool("Corriendo", true);
+            animatorSilbon.SetInteger("Estado", 2);
+            animatorSilbon.Play("Run", 0, 0f);
+            animatorSilbon.Update(0f);
+        }
+
         // Iniciar persecución continua tras el jugador
         if (_rutinaPersecucion != null)
             StopCoroutine(_rutinaPersecucion);
@@ -897,10 +926,33 @@ public class FishingSilbonDirector : MonoBehaviour
 
         silbonEnemigo.SetActive(true);
 
+        // Activar animacion de gateo/acecho (Crawl) en el Animator
+        if (animatorSilbon == null && silbonEnemigo != null)
+        {
+            animatorSilbon = silbonEnemigo.GetComponent<Animator>() ?? silbonEnemigo.GetComponentInChildren<Animator>();
+        }
+
+        if (animatorSilbon != null)
+        {
+            animatorSilbon.enabled = true;
+            animatorSilbon.SetBool("Acechando", true);
+            animatorSilbon.SetBool("Corriendo", false);
+            animatorSilbon.SetInteger("Estado", 1);
+            animatorSilbon.Play("Crawl", 0, 0f);
+            animatorSilbon.Update(0f);
+            Debug.Log("[Silbon] Animación 'Crawl' (running crawl) activada durante acecho.");
+        }
+        else
+        {
+            Debug.LogWarning("[Silbon] No se encontró componente Animator en silbonEnemigo.");
+        }
+
         yield return new WaitForSeconds(tiempoVisible);
 
         if (!_chaseTriggered && silbonEnemigo != null)
         {
+            if (animatorSilbon != null)
+                animatorSilbon.SetBool("Acechando", false);
             silbonEnemigo.SetActive(false);
             Debug.Log("[Silbon] Se esfumo entre las sombras... (Terror psicologico)");
         }
@@ -931,6 +983,14 @@ public class FishingSilbonDirector : MonoBehaviour
             if (navMeshAgentSilbon.isActiveAndEnabled && navMeshAgentSilbon.isOnNavMesh)
                 navMeshAgentSilbon.isStopped = true;
             navMeshAgentSilbon.enabled = false;
+        }
+
+        if (animatorSilbon != null)
+        {
+            animatorSilbon.SetBool("Acechando", false);
+            animatorSilbon.SetBool("Corriendo", false);
+            animatorSilbon.SetInteger("Estado", 0);
+            animatorSilbon.Play("Walk", 0, 0f);
         }
 
         if (volumeBlink != null)
