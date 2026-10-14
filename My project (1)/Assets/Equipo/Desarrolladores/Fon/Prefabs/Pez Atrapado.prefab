@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: 4629756489555710591}
   m_Layer: 0
   m_Name: Pez Atrapado
-  m_TagString: Untagged
+  m_TagString: Pez
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

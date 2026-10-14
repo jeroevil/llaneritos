@@ -210,7 +210,7 @@ public class RedPescaController : MonoBehaviour
         if (mesa == null) return;
         Reiniciar();
         AgregarPeces(Random.Range(pecesMinimos, pecesMaximos + 1));
-        ColocarBaseEn(mesa.bounds.center + Vector3.up * 0.8f);
+        ColocarBaseEn(mesa.bounds.center + Vector3.up * 2f);
         Lanzar(Vector3.zero);
     }
 
