@@ -20511,17 +20511,24 @@ MonoBehaviour:
   velocidadCaminata: 2
   aceleracion: 8
   manoActiva: 2
-  bloquearAlturaY: 1
-  adherirAlSuelo: 0
-  capasSuelo:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  autoCalibrarCapsulaVR: 1
-  radioColision: 0.3
-  elevacionBase: 0.15
   camaraOcular: {fileID: 0}
   rigTransform: {fileID: 0}
   permitirTecladoEnEditor: 1
+  detectarParedesConRaycast: 1
+  distanciaPechoOjos: 0.4
+  distanciaFrenadoPared: 0.35
+  usarRayoGrueso: 1
+  radioTorso: 0.2
+  deslizarPorParedes: 1
+  capasObstaculos:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  limitarAreaCaminata: 0
+  modoDelimitador: 0
+  radioMaximo: 5
+  centroZona: {fileID: 0}
+  cajaZonaSegura: {fileID: 0}
+  mostrarRaycastEnEscena: 1
 --- !u!143 &797871919
 CharacterController:
   m_ObjectHideFlags: 0
@@ -25233,6 +25240,9 @@ MonoBehaviour:
   anguloVisionMaximo: 75
   duracionVistazoMinimo: 1.3
   duracionVistazoMaximo: 4.5
+  moverSilbonLateralmente: 1
+  distanciaRecorridoLateral: 6
+  alternarDireccionLateral: 1
   puntoInicioPersecucion: {fileID: 543450652191160960}
   jugadorOcular: {fileID: 0}
   animatorSilbon: {fileID: 919132148525342779}
@@ -25244,6 +25254,7 @@ MonoBehaviour:
       m_Calls: []
   puntoAcecho1: {fileID: 1642781891}
   puntoAcecho2: {fileID: 1455327428}
+  audioManager: {fileID: 0}
   totalFishNeeded: 10
   currentFishCount: 0
   chaseStartSecond: 10
@@ -54675,7 +54686,7 @@ Transform:
   m_GameObject: {fileID: 1844636873}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.70710576, z: -0, w: 0.70710784}
-  m_LocalPosition: {x: 0.34, y: 0.06, z: 39.58}
+  m_LocalPosition: {x: 0.34, y: 0.06, z: 33.69}
   m_LocalScale: {x: 1.1, y: 1.1, z: 1.1}
   m_ConstrainProportionsScale: 0
   m_Children:
