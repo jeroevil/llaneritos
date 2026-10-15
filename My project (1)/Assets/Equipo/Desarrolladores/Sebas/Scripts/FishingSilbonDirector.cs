@@ -89,6 +89,17 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("Segundos que se deja ver en el ultimo acecho antes de la persecucion (pez 9) - se queda mirandote fijamente aterrador.")]
     public float duracionVistazoMaximo = 4.5f;
 
+    [Header("Desplazamiento Lateral en Acecho (Gateo A -> B)")]
+    [Tooltip("Hace que el Silbon no se quede quieto en el lugar, sino que gatee lateralmente en el fondo de un lado a otro")]
+    public bool moverSilbonLateralmente = true;
+
+    [Tooltip("Distancia en metros que recorre lateralmente en el fondo (ej. 5 a 8 metros)")]
+    [Range(2f, 15f)]
+    public float distanciaRecorridoLateral = 6.0f;
+
+    [Tooltip("Alterna aleatoriamente la direccion del gateo (izquierda a derecha o viceversa)")]
+    public bool alternarDireccionLateral = true;
+
     [Header("Punto de Persecucion Final (Pez 10)")]
     [Tooltip("Lugar donde aparecera el Silbon para arrancar a correr al 100%")]
     public Transform puntoInicioPersecucion;
@@ -115,6 +126,10 @@ public class FishingSilbonDirector : MonoBehaviour
 
     [HideInInspector] public Transform puntoAcecho1;
     [HideInInspector] public Transform puntoAcecho2;
+
+    [Header("Sistema de Audio")]
+    [Tooltip("Gestor central de audio (ambientes, silbido 3D, recompensa de pez y musica de persecucion)")]
+    public SilbonAudioManager audioManager;
 
     [Header("Progreso de Pesca")]
     [Tooltip("Total de peces necesarios para llenar la barra al 100%")]
@@ -286,6 +301,14 @@ public class FishingSilbonDirector : MonoBehaviour
 
         // 7. Puntos de Acecho y Persecucion
         AutoBuscarOInstanciarPuntos();
+
+        // 8. Gestor de Audio
+        if (audioManager == null)
+        {
+            audioManager = FindFirstObjectByType<SilbonAudioManager>();
+            if (audioManager != null)
+                Debug.Log("[Pesca] Encontrado automáticamente SilbonAudioManager: " + audioManager.name);
+        }
     }
 
     private void DesactivarColisionadorSkybox(GameObject goSkybox)
@@ -487,6 +510,9 @@ public class FishingSilbonDirector : MonoBehaviour
 
         if (volumeNormal != null)
             volumeNormal.weight = Mathf.Clamp01(1f - terrorWeight);
+
+        if (audioManager != null)
+            audioManager.SetTerrorLevel(terrorWeight);
     }
 
     /// <summary>
@@ -502,6 +528,9 @@ public class FishingSilbonDirector : MonoBehaviour
         CalcularPesoTerror(currentFishCount);
 
         Debug.Log($"[Pesca] Pez depositado ({currentFishCount}/{totalFishNeeded}) - Progreso: {progress * 100f:F0}% | Peso Terror Objetivo: {_targetTerrorWeight:F2}");
+
+        if (audioManager != null)
+            audioManager.PlayPezPoint();
 
         ApplyProgress(progress);
     }
@@ -582,6 +611,9 @@ public class FishingSilbonDirector : MonoBehaviour
         float pesoInicial = volumeBlink != null ? volumeBlink.weight : 0f;
         yield return StartCoroutine(RutinaFundidoBlink(duracionCierreOjos, pesoInicial, 1.0f));
 
+        if (audioManager != null)
+            audioManager.PlayCinematicBlink();
+
         // 3. CAMBIO A OSCURAS: Toda la realidad muta mientras la pantalla esta negra
         _targetTerrorWeight = 1.0f;
         _currentTerrorWeight = 1.0f;
@@ -635,6 +667,9 @@ public class FishingSilbonDirector : MonoBehaviour
 
         // 4. Apertura de ojos: la vista regresa y el mundo ya es la pesadilla roja
         yield return StartCoroutine(RutinaFundidoBlink(duracionAperturaOjos, 1.0f, 0.0f));
+
+        if (audioManager != null)
+            audioManager.StartChaseMusic();
 
         Debug.Log("[Silbon] ¡Ojos abiertos! La persecución con NavMeshAgent ha comenzado.");
 
@@ -895,6 +930,23 @@ public class FishingSilbonDirector : MonoBehaviour
             // Línea hacia el jugador
             Gizmos.color = new Color(1f, 0.4f, 0f, 0.35f);
             Gizmos.DrawLine(p.position, posJugador);
+
+            // Dibujar trayectoria lateral de gateo A -> B en la Scene View
+            if (moverSilbonLateralmente)
+            {
+                Vector3 dir = (p.position - posJugador);
+                dir.y = 0;
+                if (dir.sqrMagnitude > 0.001f)
+                {
+                    Vector3 lat = Vector3.Cross(Vector3.up, dir.normalized).normalized;
+                    Vector3 a = p.position - lat * (distanciaRecorridoLateral * 0.5f);
+                    Vector3 b = p.position + lat * (distanciaRecorridoLateral * 0.5f);
+                    Gizmos.color = new Color(0f, 1f, 1f, 0.8f); // Trayectoria cian
+                    Gizmos.DrawLine(a, b);
+                    Gizmos.DrawWireSphere(a, 0.25f);
+                    Gizmos.DrawWireSphere(b, 0.25f);
+                }
+            }
         }
 
         if (puntoInicioPersecucion != null)
@@ -909,22 +961,66 @@ public class FishingSilbonDirector : MonoBehaviour
     {
         if (silbonEnemigo == null) yield break;
 
-        // Desactivar temporalmente NavMeshAgent mientras solo se asoma en un punto estático
+        // Desactivar temporalmente NavMeshAgent mientras gatea lateralmente de A a B
         if (navMeshAgentSilbon != null && navMeshAgentSilbon.enabled)
             navMeshAgentSilbon.enabled = false;
 
-        silbonEnemigo.transform.position = punto.position;
-        silbonEnemigo.transform.rotation = punto.rotation;
+        Vector3 posJugador = jugadorOcular != null ? jugadorOcular.position : transform.position;
+        Vector3 dirAlPunto = (punto.position - posJugador);
+        dirAlPunto.y = 0;
+        if (dirAlPunto.sqrMagnitude > 0.001f) dirAlPunto.Normalize();
+        else dirAlPunto = Vector3.forward;
 
-        if (jugadorOcular != null)
+        // Vector lateral perpendicular a la mirada del jugador (cruza el fondo horizontalmente)
+        Vector3 vectorLateral = Vector3.Cross(Vector3.up, dirAlPunto).normalized;
+
+        Vector3 puntoInicio = punto.position;
+        Vector3 puntoFin = punto.position;
+
+        if (moverSilbonLateralmente)
         {
-            Vector3 dir = (jugadorOcular.position - silbonEnemigo.transform.position);
-            dir.y = 0;
-            if (dir.sqrMagnitude > 0.001f)
-                silbonEnemigo.transform.rotation = Quaternion.LookRotation(dir);
+            float mitad = distanciaRecorridoLateral * 0.5f;
+            bool deIzquierdaADerecha = alternarDireccionLateral ? (Random.value > 0.5f) : true;
+
+            if (deIzquierdaADerecha)
+            {
+                puntoInicio = punto.position - vectorLateral * mitad;
+                puntoFin = punto.position + vectorLateral * mitad;
+            }
+            else
+            {
+                puntoInicio = punto.position + vectorLateral * mitad;
+                puntoFin = punto.position - vectorLateral * mitad;
+            }
+
+            // Adaptar altura al terreno para que no empiece flotando ni bajo tierra
+            if (Physics.Raycast(puntoInicio + Vector3.up * 5f, Vector3.down, out RaycastHit hitIni, 10f, ~0, QueryTriggerInteraction.Ignore))
+                puntoInicio.y = hitIni.point.y;
+            if (Physics.Raycast(puntoFin + Vector3.up * 5f, Vector3.down, out RaycastHit hitFin, 10f, ~0, QueryTriggerInteraction.Ignore))
+                puntoFin.y = hitFin.point.y;
+        }
+
+        silbonEnemigo.transform.position = puntoInicio;
+
+        // Encarar la dirección hacia donde va gateando
+        Vector3 dirAvance = (puntoFin - puntoInicio);
+        dirAvance.y = 0;
+        if (dirAvance.sqrMagnitude > 0.01f)
+        {
+            silbonEnemigo.transform.rotation = Quaternion.LookRotation(dirAvance.normalized, Vector3.up);
+        }
+        else if (dirAlPunto.sqrMagnitude > 0.01f)
+        {
+            silbonEnemigo.transform.rotation = Quaternion.LookRotation(dirAlPunto, Vector3.up);
         }
 
         silbonEnemigo.SetActive(true);
+
+        if (audioManager == null)
+            audioManager = FindFirstObjectByType<SilbonAudioManager>();
+
+        if (audioManager != null)
+            audioManager.PlaySilbonStalkingSound(silbonEnemigo.transform.position, tiempoVisible);
 
         // Activar animacion de gateo/acecho (Crawl) en el Animator
         if (animatorSilbon == null && silbonEnemigo != null)
@@ -940,21 +1036,50 @@ public class FishingSilbonDirector : MonoBehaviour
             animatorSilbon.SetInteger("Estado", 1);
             animatorSilbon.Play("Crawl", 0, 0f);
             animatorSilbon.Update(0f);
-            Debug.Log("[Silbon] Animación 'Crawl' (running crawl) activada durante acecho.");
+            Debug.Log($"[Silbon] Gateando lateralmente de A a B ({(puntoFin - puntoInicio).magnitude:F1}m en {tiempoVisible:F1}s).");
         }
         else
         {
             Debug.LogWarning("[Silbon] No se encontró componente Animator en silbonEnemigo.");
         }
 
-        yield return new WaitForSeconds(tiempoVisible);
+        // Desplazamiento lateral fluido de Punto A a Punto B durante tiempoVisible
+        float tiempoPasado = 0f;
+        while (tiempoPasado < tiempoVisible)
+        {
+            tiempoPasado += Time.deltaTime;
+            float factor = Mathf.Clamp01(tiempoPasado / tiempoVisible);
+
+            if (moverSilbonLateralmente)
+            {
+                Vector3 posActual = Vector3.Lerp(puntoInicio, puntoFin, factor);
+
+                // Pegar al suelo suavemente siguiendo el relieve del terreno
+                if (Physics.Raycast(posActual + Vector3.up * 5f, Vector3.down, out RaycastHit hitSuelo, 10f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    posActual.y = hitSuelo.point.y;
+                }
+
+                silbonEnemigo.transform.position = posActual;
+
+                // Actualizar la fuente 3D del silbido para que acompañe el gateo del Silbón
+                if (audioManager != null)
+                    audioManager.ActualizarPosicionSilbato(posActual);
+            }
+
+            yield return null;
+        }
+
+        // Desvanecer el silbato suavemente hacia el silencio
+        if (audioManager != null)
+            audioManager.StopSilbatoConFade(0.6f);
 
         if (!_chaseTriggered && silbonEnemigo != null)
         {
             if (animatorSilbon != null)
                 animatorSilbon.SetBool("Acechando", false);
             silbonEnemigo.SetActive(false);
-            Debug.Log("[Silbon] Se esfumo entre las sombras... (Terror psicologico)");
+            Debug.Log("[Silbon] Se esfumo entre las sombras tras gatear lateralmente...");
         }
     }
 
@@ -1006,6 +1131,9 @@ public class FishingSilbonDirector : MonoBehaviour
             silbonEnemigo.SetActive(false);
 
         AplicarPesosInmediatos(0f);
+
+        if (audioManager != null)
+            audioManager.ResetAudio();
 
         if (playableDirector != null)
         {
