@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Playables;
+using UnityEngine.Animations;
 using Oculus.Interaction;
 
 /// <summary>
@@ -126,6 +128,11 @@ public class RedPescaController : MonoBehaviour
     readonly Queue<KeyValuePair<float, Vector3>> historialMano = new Queue<KeyValuePair<float, Vector3>>();
     const float VentanaVelocidad = 0.1f;
 
+    // PlayableGraph para evaluar el clip en Android (Mecanim nativo compatible con Quest)
+    PlayableGraph grafoAnimacion;
+    AnimationClipPlayable clipPlayable;
+    bool grafoInicializado;
+
     string ultimoEvento = "";
 
     void Awake()
@@ -135,9 +142,43 @@ public class RedPescaController : MonoBehaviour
         rotLocalMalla = t.localRotation;
         escalaLocalMalla = t.localScale;
 
+        if (mallaRed != null)
+            mallaRed.updateWhenOffscreen = true;
+
+        InicializarGrafoAnimacion();
+
         limitesAbierta = MedirLimites(1f);
         limitesCerrada = MedirLimites(0f);
         AplicarApertura(0f);
+    }
+
+    void InicializarGrafoAnimacion()
+    {
+        if (animacionRed == null || mallaRed == null) return;
+
+        // El PlayableGraph de animacion requiere un componente Animator
+        var animator = mallaRed.GetComponent<Animator>();
+        if (animator == null)
+            animator = mallaRed.GetComponentInParent<Animator>();
+
+        if (animator == null)
+            animator = mallaRed.gameObject.AddComponent<Animator>();
+
+        animator.applyRootMotion = false;
+
+        // Grafo en modo manual: se evalua unicamente cuando AplicarApertura() lo solicita
+        grafoAnimacion = PlayableGraph.Create("GrafoRedPesca");
+        grafoAnimacion.SetTimeUpdateMode(DirectorUpdateMode.Manual);
+
+        var output = AnimationPlayableOutput.Create(grafoAnimacion, "SalidaRed", animator);
+        clipPlayable = AnimationClipPlayable.Create(grafoAnimacion, animacionRed);
+        clipPlayable.SetTime(0);
+        clipPlayable.SetSpeed(0);
+
+        output.SetSourcePlayable(clipPlayable);
+        grafoAnimacion.Play();
+
+        grafoInicializado = true;
     }
 
     void OnEnable()
@@ -148,6 +189,14 @@ public class RedPescaController : MonoBehaviour
     void OnDisable()
     {
         if (grabbable != null) grabbable.WhenPointerEventRaised -= AlEventoAgarre;
+    }
+
+    void OnDestroy()
+    {
+        if (grafoInicializado && grafoAnimacion.IsValid())
+        {
+            grafoAnimacion.Destroy();
+        }
     }
 
     void Start()
@@ -546,7 +595,19 @@ public class RedPescaController : MonoBehaviour
     {
         apertura = Mathf.Clamp01(valor);
         escalaVisual = escala;
-        animacionRed.SampleAnimation(mallaRed.gameObject, apertura * tiempoClipAbierta);
+
+        float tiempoMuestreo = apertura * tiempoClipAbierta;
+
+        if (grafoInicializado && grafoAnimacion.IsValid())
+        {
+            clipPlayable.SetTime(tiempoMuestreo);
+            grafoAnimacion.Evaluate();
+        }
+        else if (animacionRed != null && mallaRed != null)
+        {
+            // Fallback en caso de que el grafo no este disponible
+            animacionRed.SampleAnimation(mallaRed.gameObject, tiempoMuestreo);
+        }
 
         // El clip mueve y gira la malla (movimiento de raíz de Blender): se descarta
         var t = mallaRed.transform;
