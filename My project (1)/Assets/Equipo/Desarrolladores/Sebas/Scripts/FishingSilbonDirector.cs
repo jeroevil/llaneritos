@@ -118,6 +118,10 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("Velocidad a la que el Silbon persigue al jugador tras el apagon del pez 10.")]
     public float velocidadPersecucion = 4.2f;
 
+    [Tooltip("Segundos que dura la animacion de emerger (Silbon_Emerge_003) antes de arrancar a correr a toda velocidad.")]
+    [Range(1f, 10f)]
+    public float duracionEmergencia = 3.5f;
+
     [Tooltip("Distancia en metros para considerar que el Silbon atrapo al jugador.")]
     public float distanciaCapturaJugador = 1.3f;
 
@@ -642,13 +646,10 @@ public class FishingSilbonDirector : MonoBehaviour
 
             silbonEnemigo.SetActive(true);
 
-            // Preparar NavMeshAgent para la persecución
+            // El NavMeshAgent se activa DESPUES de emerger
             if (navMeshAgentSilbon != null)
             {
-                navMeshAgentSilbon.enabled = true;
-                navMeshAgentSilbon.speed = velocidadPersecucion;
-                if (puntoInicioPersecucion != null)
-                    navMeshAgentSilbon.Warp(puntoInicioPersecucion.position);
+                navMeshAgentSilbon.enabled = false;
             }
         }
 
@@ -668,12 +669,9 @@ public class FishingSilbonDirector : MonoBehaviour
         // 4. Apertura de ojos: la vista regresa y el mundo ya es la pesadilla roja
         yield return StartCoroutine(RutinaFundidoBlink(duracionAperturaOjos, 1.0f, 0.0f));
 
-        if (audioManager != null)
-            audioManager.StartChaseMusic();
+        Debug.Log("[Silbon] ¡Ojos abiertos! El Silbón emerge frente al jugador...");
 
-        Debug.Log("[Silbon] ¡Ojos abiertos! La persecución con NavMeshAgent ha comenzado.");
-
-        // Activar animacion de correr (Run) en el Animator
+        // Activar animacion de emerger (Emerge) en el Animator
         if (animatorSilbon == null && silbonEnemigo != null)
         {
             animatorSilbon = silbonEnemigo.GetComponent<Animator>() ?? silbonEnemigo.GetComponentInChildren<Animator>();
@@ -683,10 +681,45 @@ public class FishingSilbonDirector : MonoBehaviour
         {
             animatorSilbon.enabled = true;
             animatorSilbon.SetBool("Acechando", false);
-            animatorSilbon.SetBool("Corriendo", true);
+            animatorSilbon.SetBool("Emergiendo", true);
+            animatorSilbon.SetBool("Corriendo", false);
             animatorSilbon.SetInteger("Estado", 2);
-            animatorSilbon.Play("Run", 0, 0f);
+            if (animatorSilbon.HasState(0, Animator.StringToHash("Emerge")))
+                animatorSilbon.Play("Emerge", 0, 0f);
+            else if (animatorSilbon.HasState(0, Animator.StringToHash("Silbon_Emerge_003")))
+                animatorSilbon.Play("Silbon_Emerge_003", 0, 0f);
             animatorSilbon.Update(0f);
+        }
+
+        // Tiempo en que el Silbon emerge y se levanta amenazante
+        if (duracionEmergencia > 0f)
+        {
+            yield return new WaitForSeconds(duracionEmergencia);
+        }
+
+        if (audioManager != null)
+            audioManager.StartChaseMusic();
+
+        Debug.Log("[Silbon] ¡Ha emergido completamente! La persecución con NavMeshAgent ha comenzado.");
+
+        // Activar animacion de correr (Run) en el Animator
+        if (animatorSilbon != null)
+        {
+            animatorSilbon.SetBool("Emergiendo", false);
+            animatorSilbon.SetBool("Corriendo", true);
+            animatorSilbon.SetInteger("Estado", 3);
+            if (animatorSilbon.HasState(0, Animator.StringToHash("Run")))
+                animatorSilbon.CrossFadeInFixedTime("Run", 0.2f);
+            animatorSilbon.Update(0f);
+        }
+
+        // Activar NavMeshAgent para la persecución implacable
+        if (navMeshAgentSilbon != null)
+        {
+            navMeshAgentSilbon.enabled = true;
+            navMeshAgentSilbon.speed = velocidadPersecucion;
+            if (puntoInicioPersecucion != null)
+                navMeshAgentSilbon.Warp(puntoInicioPersecucion.position);
         }
 
         // Iniciar persecución continua tras el jugador
@@ -714,6 +747,16 @@ public class FishingSilbonDirector : MonoBehaviour
                     if (dist <= distanciaCapturaJugador)
                     {
                         Debug.Log("[Silbon] ¡El Silbón te ha atrapado! (Jumpscare)");
+                        if (animatorSilbon != null)
+                        {
+                            animatorSilbon.SetBool("Corriendo", false);
+                            animatorSilbon.SetBool("Atrapando", true);
+                            animatorSilbon.SetInteger("Estado", 4);
+                            if (animatorSilbon.HasState(0, Animator.StringToHash("Atrapa")))
+                                animatorSilbon.CrossFadeInFixedTime("Atrapa", 0.1f);
+                            else if (animatorSilbon.HasState(0, Animator.StringToHash("Silbon_Atrapa")))
+                                animatorSilbon.CrossFadeInFixedTime("Silbon_Atrapa", 0.1f);
+                        }
                         OnJugadorAtrapado?.Invoke();
                         navMeshAgentSilbon.isStopped = true;
                         yield break;
@@ -1022,7 +1065,7 @@ public class FishingSilbonDirector : MonoBehaviour
         if (audioManager != null)
             audioManager.PlaySilbonStalkingSound(silbonEnemigo.transform.position, tiempoVisible);
 
-        // Activar animacion de gateo/acecho (Crawl) en el Animator
+        // Activar animacion de caminata/acecho (Walk) en el Animator
         if (animatorSilbon == null && silbonEnemigo != null)
         {
             animatorSilbon = silbonEnemigo.GetComponent<Animator>() ?? silbonEnemigo.GetComponentInChildren<Animator>();
@@ -1034,9 +1077,15 @@ public class FishingSilbonDirector : MonoBehaviour
             animatorSilbon.SetBool("Acechando", true);
             animatorSilbon.SetBool("Corriendo", false);
             animatorSilbon.SetInteger("Estado", 1);
-            animatorSilbon.Play("Crawl", 0, 0f);
+            if (animatorSilbon.HasState(0, Animator.StringToHash("Crawl")))
+                animatorSilbon.Play("Crawl", 0, 0f);
+            else if (animatorSilbon.HasState(0, Animator.StringToHash("Walk")))
+                animatorSilbon.Play("Walk", 0, 0f);
+            else if (animatorSilbon.HasState(0, Animator.StringToHash("Silbon_Caminando_Loop")))
+                animatorSilbon.Play("Silbon_Caminando_Loop", 0, 0f);
+
             animatorSilbon.Update(0f);
-            Debug.Log($"[Silbon] Gateando lateralmente de A a B ({(puntoFin - puntoInicio).magnitude:F1}m en {tiempoVisible:F1}s).");
+            Debug.Log($"[Silbon] Acechando lateralmente de A a B ({(puntoFin - puntoInicio).magnitude:F1}m en {tiempoVisible:F1}s).");
         }
         else
         {

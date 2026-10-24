@@ -295,6 +295,16 @@ public class PinchToWalk : MonoBehaviour
     }
 
     /// <summary>
+    /// Mueve el centro del limite circular a una posicion nueva (p. ej. tras un teletransporte)
+    /// y frena la inercia. Si 'centroZona' esta asignado, ese Transform sigue teniendo prioridad.
+    /// </summary>
+    public void ReubicarCentro(Vector3 nuevoCentro)
+    {
+        _posicionOrigen = nuevoCentro;
+        _velocidadActual = Vector3.zero;
+    }
+
+    /// <summary>
     /// Limita la posicion en los ejes XZ sin alterar nunca la altura Y del jugador.
     /// </summary>
     private Vector3 AplicarLimitesDeZona(Vector3 posicionObjetivo)
