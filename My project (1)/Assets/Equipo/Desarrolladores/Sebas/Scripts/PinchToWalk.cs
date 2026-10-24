@@ -6,14 +6,8 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Componente de locomocion continua para Meta XR (Hand Tracking o Mandos).
 /// Permite al jugador caminar en linea recta horizontal hacia donde mira manteniendo un pellizco (indice + pulgar).
-/// 
-/// Solucion integral para VR y colisiones:
-/// - Mantiene la altura Y exactamente a la altura natural real del visor (sin elevarte, flotar ni ser gigante).
-/// - Calibra la capsula del CharacterController para que empiece a 15 cm del suelo (no toca el piso, no te empuja hacia arriba),
-///   pero cubre todo tu cuerpo hasta la cabeza para COLISIONAR con la orilla del agua, arboles, rocas y muros.
-/// - Sigue dinamicamente la posicion horizontal de la cabeza (CenterEyeAnchor).
+/// Se detiene suavemente al soltar.
 /// </summary>
-[RequireComponent(typeof(CharacterController))]
 public class PinchToWalk : MonoBehaviour
 {
     public enum ManoSeleccionada
@@ -36,29 +30,7 @@ public class PinchToWalk : MonoBehaviour
     [Tooltip("Cual mano activa el movimiento de caminata")]
     public ManoSeleccionada manoActiva = ManoSeleccionada.AmbasManos;
 
-    [Header("Control Estricto de Altura (Eje Y)")]
-    [Tooltip("Bloquea la altura Y del Rig al suelo original para que NUNCA cambie tu altura en VR")]
-    public bool bloquearAlturaY = true;
-
-    [Tooltip("Solo si bloquearAlturaY esta desactivado: busca el suelo con raycast")]
-    public bool adherirAlSuelo = false;
-
-    [Tooltip("Capas consideradas suelo si adherirAlSuelo esta activo")]
-    public LayerMask capasSuelo = ~0;
-
-    [Header("Colisionador VR (CharacterController)")]
-    [Tooltip("Auto-calibra la capsula para que coincida con tu cuerpo en VR sin tocar el suelo")]
-    public bool autoCalibrarCapsulaVR = true;
-
-    [Tooltip("Radio del cuerpo en VR (0.25 - 0.35m es ideal para no atascarse en pasos estrechos)")]
-    [Range(0.15f, 0.5f)]
-    public float radioColision = 0.3f;
-
-    [Tooltip("Elevacion de la base de la capsula sobre el suelo (15 cm). Evita que el terreno empuje al jugador hacia arriba.")]
-    [Range(0.05f, 0.3f)]
-    public float elevacionBase = 0.15f;
-
-    [Header("Referencias (Se buscan solas si estan vacias)")]
+    [Header("Referencias")]
     [Tooltip("La camara del casco (CenterEyeAnchor). Define la direccion hacia donde se camina.")]
     public Transform camaraOcular;
 
@@ -69,13 +41,64 @@ public class PinchToWalk : MonoBehaviour
     [Tooltip("Permite presionar la tecla W para simular la caminata sin casco puesto")]
     public bool permitirTecladoEnEditor = true;
 
+    [Header("Deteccion de Paredes por Raycast (Desde el Pecho)")]
+    [Tooltip("Lanza un rayo desde el pecho hacia el frente para detectar colliders/paredes (como la orilla) y frenar sin tocar la fisica ni la altura")]
+    public bool detectarParedesConRaycast = true;
+
+    [Tooltip("Distancia hacia abajo desde los ojos donde se ubica el pecho (habitualmente 0.35m - 0.45m)")]
+    [Range(0.1f, 0.8f)]
+    public float distanciaPechoOjos = 0.4f;
+
+    [Tooltip("Distancia de seguridad para detenerte antes de tocar la pared (ej. 0.35m)")]
+    [Range(0.1f, 1.0f)]
+    public float distanciaFrenadoPared = 0.35f;
+
+    [Tooltip("Usa una esfera/cuerpo en vez de una linea delgada para no atravesar esquinas ni colliders bajos")]
+    public bool usarRayoGrueso = true;
+
+    [Tooltip("Radio del rayo grueso (ancho del torso)")]
+    [Range(0.05f, 0.4f)]
+    public float radioTorso = 0.2f;
+
+    [Tooltip("Permite deslizarse suavemente a lo largo de la pared si caminas en diagonal")]
+    public bool deslizarPorParedes = true;
+
+    [Tooltip("Capas de colision que bloquean el paso (por defecto todas excepto Triggers)")]
+    public LayerMask capasObstaculos = ~0;
+
+    [Header("Delimitador de Zona Opcional")]
+    [Tooltip("Opcional: Si quieres tener un perimetro circular de seguridad adicional")]
+    public bool limitarAreaCaminata = false;
+
+    public enum ModoDelimitador
+    {
+        RadioCircular,
+        CajaPermitida
+    }
+
+    public ModoDelimitador modoDelimitador = ModoDelimitador.RadioCircular;
+
+    [Range(1f, 25f)]
+    public float radioMaximo = 5.0f;
+    public Transform centroZona;
+    public BoxCollider cajaZonaSegura;
+
+    [Header("Visualizacion en Scene View")]
+    [Tooltip("Dibuja el rayo del pecho y los impactos en la ventana Scene de Unity")]
+    public bool mostrarRaycastEnEscena = true;
+
     // Estado interno
     private Vector3 _velocidadActual = Vector3.zero;
     private CharacterController _characterController;
     private OVRHand _ovrHandIzquierda;
     private OVRHand _ovrHandDerecha;
-    private float _alturaFijadaY;
-    private bool _alturaInicialCapturada = false;
+    private Vector3 _posicionOrigen;
+
+    // Para debug visual del Raycast
+    private Vector3 _debugOrigenPecho;
+    private Vector3 _debugDireccionRayo;
+    private bool _debugHuboImpacto;
+    private Vector3 _debugPuntoImpacto;
 
     private void Awake()
     {
@@ -85,34 +108,13 @@ public class PinchToWalk : MonoBehaviour
     private void Start()
     {
         AutoBuscarReferencias();
-
         if (rigTransform != null)
         {
-            _alturaFijadaY = rigTransform.position.y;
-            _alturaInicialCapturada = true;
+            _posicionOrigen = rigTransform.position;
         }
-
-        ConfigurarCharacterControllerVR();
-    }
-
-    private void OnValidate()
-    {
-        if (_characterController == null)
-            _characterController = GetComponent<CharacterController>();
-
-        if (_characterController != null && autoCalibrarCapsulaVR)
+        else
         {
-            _characterController.stepOffset = 0f;
-            _characterController.skinWidth = 0.03f;
-            _characterController.minMoveDistance = 0f;
-            _characterController.radius = radioColision;
-
-            if (!Application.isPlaying)
-            {
-                float alturaDefault = 1.6f;
-                _characterController.height = alturaDefault;
-                _characterController.center = new Vector3(0f, elevacionBase + (alturaDefault * 0.5f), 0f);
-            }
+            _posicionOrigen = transform.position;
         }
     }
 
@@ -133,8 +135,7 @@ public class PinchToWalk : MonoBehaviour
             }
         }
 
-        if (_characterController == null)
-            _characterController = GetComponent<CharacterController>();
+        _characterController = GetComponent<CharacterController>();
 
         // Localizar componentes OVRHand si existen en la escena
         if (_ovrHandIzquierda == null || _ovrHandDerecha == null)
@@ -151,55 +152,9 @@ public class PinchToWalk : MonoBehaviour
         }
     }
 
-    private void ConfigurarCharacterControllerVR()
-    {
-        if (_characterController == null) return;
-
-        // Configuracion vital para VR:
-        // stepOffset en 0 para que JAMAS trepe bordes ni se eleve en Y al chocar con colliders horizontales
-        _characterController.stepOffset = 0f;
-        _characterController.skinWidth = 0.03f;
-        _characterController.minMoveDistance = 0f;
-        _characterController.slopeLimit = 45f;
-
-        ActualizarCapsulaVR();
-    }
-
-    private void ActualizarCapsulaVR()
-    {
-        if (_characterController == null || !autoCalibrarCapsulaVR) return;
-
-        float alturaOjos = 1.75f;
-        Vector3 posLocalOjos = Vector3.up * 1.75f;
-
-        if (camaraOcular != null)
-        {
-            posLocalOjos = camaraOcular.localPosition;
-            if (posLocalOjos.y > 0.4f)
-                alturaOjos = posLocalOjos.y;
-        }
-
-        // La capsula empieza a 'elevacionBase' (15 cm) del suelo para NUNCA enterrarse en el terreno
-        // y llega hasta la altura de los ojos
-        float alturaCapsula = Mathf.Max(0.5f, alturaOjos - elevacionBase);
-
-        _characterController.height = alturaCapsula;
-        _characterController.radius = radioColision;
-
-        // Centrar la capsula exactamente bajo la cabeza y entre elevacionBase y la cabeza
-        _characterController.center = new Vector3(
-            posLocalOjos.x,
-            elevacionBase + (alturaCapsula * 0.5f),
-            posLocalOjos.z
-        );
-    }
-
     private void Update()
     {
-        // 1. Sincronizar la capsula con la posicion de la cabeza en el espacio fisico
-        ActualizarCapsulaVR();
-
-        // 2. Detectar entrada de caminata (Pellizco o W)
+        // 1. Detectar entrada de caminata (Pellizco o W)
         bool quiereAvanzar = DetectarEntradaCaminata();
 
         Vector3 direccionDeseada = Vector3.zero;
@@ -215,73 +170,285 @@ public class PinchToWalk : MonoBehaviour
 
         Vector3 velocidadObjetivo = direccionDeseada * velocidadCaminata;
 
-        // Aceleracion y frenado suave para evitar mareo en VR
+        // Aceleracion y frenado suave para no marear en VR
         _velocidadActual = Vector3.MoveTowards(_velocidadActual, velocidadObjetivo, aceleracion * Time.deltaTime);
 
-        // 3. Aplicar movimiento
-        if (_velocidadActual.sqrMagnitude > 0.0001f)
+        // 2. Aplicar desplazamiento horizontal plano
+        if (_velocidadActual.sqrMagnitude > 0.0001f && rigTransform != null)
         {
             Vector3 desplazamientoHorizontal = new Vector3(_velocidadActual.x, 0f, _velocidadActual.z) * Time.deltaTime;
 
-            if (_characterController != null && _characterController.enabled)
+            // A) Filtro de Raycast desde el pecho hacia el frente para detectar la pared
+            if (detectarParedesConRaycast)
             {
-                // Mover con el CharacterController para chocar con la orilla, muros y barreras
-                _characterController.Move(desplazamientoHorizontal);
+                desplazamientoHorizontal = FiltrarMovimientoConRaycastPecho(desplazamientoHorizontal);
+            }
 
-                // Bloqueo estricto de altura: no permitir que ninguna colision altere la altura Y del jugador
-                if (bloquearAlturaY && _alturaInicialCapturada && rigTransform != null)
+            // B) Filtro opcional de limite perimetral (si esta activado)
+            if (limitarAreaCaminata)
+            {
+                Vector3 posicionDeseada = rigTransform.position + desplazamientoHorizontal;
+                Vector3 posicionLimitada = AplicarLimitesDeZona(posicionDeseada);
+                desplazamientoHorizontal = posicionLimitada - rigTransform.position;
+            }
+
+            desplazamientoHorizontal.y = 0f; // Asegurar que la altura NUNCA se altere
+
+            if (desplazamientoHorizontal.sqrMagnitude > 0.000001f)
+            {
+                if (_characterController != null && _characterController.enabled)
                 {
-                    Vector3 pos = rigTransform.position;
-                    pos.y = _alturaFijadaY;
-                    rigTransform.position = pos;
+                    _characterController.Move(desplazamientoHorizontal);
+                }
+                else
+                {
+                    rigTransform.position += desplazamientoHorizontal;
                 }
             }
-            else if (rigTransform != null)
-            {
-                float alturaY = _alturaInicialCapturada ? _alturaFijadaY : rigTransform.position.y;
-                Vector3 nuevaPos = rigTransform.position + desplazamientoHorizontal;
-
-                if (bloquearAlturaY)
-                {
-                    nuevaPos.y = alturaY;
-                }
-                else if (adherirAlSuelo)
-                {
-                    Vector3 origenRayo = new Vector3(nuevaPos.x, alturaY + 0.5f, nuevaPos.z);
-                    RaycastHit[] hits = Physics.RaycastAll(origenRayo, Vector3.down, 2.5f, capasSuelo, QueryTriggerInteraction.Ignore);
-                    
-                    float mejorY = -999f;
-                    foreach (var h in hits)
-                    {
-                        if (h.transform == rigTransform || h.transform.IsChildOf(rigTransform))
-                            continue;
-
-                        if (Mathf.Abs(h.point.y - alturaY) < 0.35f && h.point.y > mejorY)
-                            mejorY = h.point.y;
-                    }
-
-                    if (mejorY > -900f)
-                        nuevaPos.y = Mathf.MoveTowards(alturaY, mejorY, 2.0f * Time.deltaTime);
-                    else
-                        nuevaPos.y = alturaY;
-                }
-
-                rigTransform.position = nuevaPos;
-            }
+        }
+        else
+        {
+            _debugHuboImpacto = false;
         }
     }
 
-    private void LateUpdate()
+    /// <summary>
+    /// Lanza un rayo/esfera horizontal desde el pecho en la direccion del movimiento.
+    /// Si detecta un collider o pared en frente (como la orilla), detiene el avance justo a la distancia de seguridad.
+    /// </summary>
+    private Vector3 FiltrarMovimientoConRaycastPecho(Vector3 desplazamientoDeseado)
     {
-        // Forzar que el Rig Y se mantenga siempre matematicamente en su altura fijada
-        if (bloquearAlturaY && _alturaInicialCapturada && rigTransform != null)
+        if (desplazamientoDeseado.sqrMagnitude < 0.000001f)
+            return Vector3.zero;
+
+        // Calcular el punto exacto del pecho (debajo de los ojos del casco VR)
+        Vector3 puntoPecho;
+        if (camaraOcular != null)
         {
-            Vector3 pos = rigTransform.position;
-            if (Mathf.Abs(pos.y - _alturaFijadaY) > 0.0001f)
+            puntoPecho = camaraOcular.position - Vector3.up * distanciaPechoOjos;
+        }
+        else
+        {
+            puntoPecho = rigTransform.position + Vector3.up * 1.2f;
+        }
+
+        Vector3 direccion = desplazamientoDeseado.normalized;
+        float distanciaPaso = desplazamientoDeseado.magnitude;
+        float distanciaChequeo = distanciaPaso + distanciaFrenadoPared;
+
+        _debugOrigenPecho = puntoPecho;
+        _debugDireccionRayo = direccion;
+
+        RaycastHit hit;
+        bool impacto;
+
+        if (usarRayoGrueso)
+        {
+            // SphereCast actúa como un cilindro/pecho con volumen real
+            impacto = Physics.SphereCast(puntoPecho, radioTorso, direccion, out hit, distanciaChequeo, capasObstaculos, QueryTriggerInteraction.Ignore);
+        }
+        else
+        {
+            // Raycast directo delgado
+            impacto = Physics.Raycast(puntoPecho, direccion, out hit, distanciaChequeo, capasObstaculos, QueryTriggerInteraction.Ignore);
+        }
+
+        _debugHuboImpacto = impacto;
+
+        if (impacto)
+        {
+            _debugPuntoImpacto = hit.point;
+
+            // Calcular cuanto podemos avanzar hacia la pared antes de llegar a la distancia de frenado
+            float distanciaDisponible = Mathf.Max(0f, hit.distance - distanciaFrenadoPared);
+            float avanceHaciaPared = Mathf.Min(distanciaPaso, distanciaDisponible);
+
+            Vector3 pasoRestringido = direccion * avanceHaciaPared;
+
+            // Si queremos deslizarnos a lo largo de la pared (ej. si caminamos en diagonal)
+            if (deslizarPorParedes && hit.normal.sqrMagnitude > 0.01f)
             {
-                pos.y = _alturaFijadaY;
-                rigTransform.position = pos;
+                Vector3 normalHorizontal = hit.normal;
+                normalHorizontal.y = 0f;
+                if (normalHorizontal.sqrMagnitude > 0.01f)
+                {
+                    normalHorizontal.Normalize();
+                    Vector3 deslizamiento = Vector3.ProjectOnPlane(desplazamientoDeseado, normalHorizontal);
+                    deslizamiento.y = 0f;
+
+                    // Verificar que no choque inmediatamente con otra pared en la direccion de deslizamiento
+                    if (deslizamiento.sqrMagnitude > 0.0001f)
+                    {
+                        bool chocaDeslizamiento = Physics.Raycast(puntoPecho, deslizamiento.normalized, deslizamiento.magnitude + distanciaFrenadoPared, capasObstaculos, QueryTriggerInteraction.Ignore);
+                        if (!chocaDeslizamiento)
+                        {
+                            return deslizamiento;
+                        }
+                    }
+                }
             }
+
+            return pasoRestringido;
+        }
+
+        return desplazamientoDeseado;
+    }
+
+    /// <summary>
+    /// Mueve el centro del limite circular a una posicion nueva (p. ej. tras un teletransporte)
+    /// y frena la inercia. Si 'centroZona' esta asignado, ese Transform sigue teniendo prioridad.
+    /// </summary>
+    public void ReubicarCentro(Vector3 nuevoCentro)
+    {
+        _posicionOrigen = nuevoCentro;
+        _velocidadActual = Vector3.zero;
+    }
+
+    /// <summary>
+    /// Limita la posicion en los ejes XZ sin alterar nunca la altura Y del jugador.
+    /// </summary>
+    private Vector3 AplicarLimitesDeZona(Vector3 posicionObjetivo)
+    {
+        if (!limitarAreaCaminata) return posicionObjetivo;
+
+        if (modoDelimitador == ModoDelimitador.RadioCircular)
+        {
+            Vector3 centro = centroZona != null ? centroZona.position : _posicionOrigen;
+            Vector2 centro2D = new Vector2(centro.x, centro.z);
+            Vector2 pos2D = new Vector2(posicionObjetivo.x, posicionObjetivo.z);
+            Vector2 offset = pos2D - centro2D;
+
+            if (offset.magnitude > radioMaximo)
+            {
+                offset = offset.normalized * radioMaximo;
+                return new Vector3(centro2D.x + offset.x, posicionObjetivo.y, centro2D.y + offset.y);
+            }
+            return posicionObjetivo;
+        }
+        else if (modoDelimitador == ModoDelimitador.CajaPermitida && cajaZonaSegura != null)
+        {
+            Bounds b = cajaZonaSegura.bounds;
+            float clampedX = Mathf.Clamp(posicionObjetivo.x, b.min.x, b.max.x);
+            float clampedZ = Mathf.Clamp(posicionObjetivo.z, b.min.z, b.max.z);
+            return new Vector3(clampedX, posicionObjetivo.y, clampedZ);
+        }
+
+        return posicionObjetivo;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        DibujarGizmosDelimitador();
+        DibujarGizmoRayoPecho();
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (mostrarRaycastEnEscena)
+        {
+            DibujarGizmoRayoPecho();
+        }
+        if (mostrarRaycastEnEscena && limitarAreaCaminata)
+        {
+            DibujarGizmosDelimitador();
+        }
+    }
+
+    private void DibujarGizmoRayoPecho()
+    {
+        if (!detectarParedesConRaycast) return;
+
+        Vector3 puntoPecho;
+        Vector3 direccionFrente;
+
+        if (camaraOcular != null)
+        {
+            puntoPecho = camaraOcular.position - Vector3.up * distanciaPechoOjos;
+            direccionFrente = camaraOcular.forward;
+        }
+        else if (rigTransform != null)
+        {
+            puntoPecho = rigTransform.position + Vector3.up * 1.2f;
+            direccionFrente = rigTransform.forward;
+        }
+        else
+        {
+            puntoPecho = transform.position + Vector3.up * 1.2f;
+            direccionFrente = transform.forward;
+        }
+
+        direccionFrente.y = 0f;
+        if (direccionFrente.sqrMagnitude > 0.001f)
+            direccionFrente.Normalize();
+        else
+            direccionFrente = Vector3.forward;
+
+        // Dibujar origen en el pecho
+        Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.8f);
+        Gizmos.DrawWireSphere(puntoPecho, usarRayoGrueso ? radioTorso : 0.08f);
+
+        // Lanzar comprobacion visual
+        float distanciaVista = Mathf.Max(1.5f, distanciaFrenadoPared * 2f);
+        RaycastHit hit;
+        bool choca;
+
+        if (usarRayoGrueso)
+        {
+            choca = Physics.SphereCast(puntoPecho, radioTorso, direccionFrente, out hit, distanciaVista, capasObstaculos, QueryTriggerInteraction.Ignore);
+        }
+        else
+        {
+            choca = Physics.Raycast(puntoPecho, direccionFrente, out hit, distanciaVista, capasObstaculos, QueryTriggerInteraction.Ignore);
+        }
+
+        if (choca)
+        {
+            // Rayo impactando pared
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(puntoPecho, hit.point);
+            Gizmos.DrawWireSphere(hit.point, 0.1f);
+
+            // Marca de distancia de frenado
+            Vector3 puntoFrenado = hit.point - direccionFrente * distanciaFrenadoPared;
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawLine(puntoFrenado - Vector3.up * 0.2f, puntoFrenado + Vector3.up * 0.2f);
+        }
+        else
+        {
+            // Rayo libre hacia el frente
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(puntoPecho, puntoPecho + direccionFrente * distanciaVista);
+        }
+    }
+
+    private void DibujarGizmosDelimitador()
+    {
+        if (!limitarAreaCaminata) return;
+
+        Vector3 centro = centroZona != null ? centroZona.position : (Application.isPlaying ? _posicionOrigen : transform.position);
+
+        if (modoDelimitador == ModoDelimitador.RadioCircular)
+        {
+            Gizmos.color = new Color(0f, 0.9f, 1f, 0.75f); // Cian brillante
+            int segmentos = 48;
+            Vector3 prevPunto = centro + new Vector3(Mathf.Cos(0) * radioMaximo, 0, Mathf.Sin(0) * radioMaximo);
+            for (int i = 1; i <= segmentos; i++)
+            {
+                float angulo = i * (Mathf.PI * 2f / segmentos);
+                Vector3 nuevoPunto = centro + new Vector3(Mathf.Cos(angulo) * radioMaximo, 0, Mathf.Sin(angulo) * radioMaximo);
+                Gizmos.DrawLine(prevPunto, nuevoPunto);
+                prevPunto = nuevoPunto;
+            }
+
+            // Cruz central de referencia
+            Gizmos.color = new Color(0f, 1f, 0.5f, 0.6f);
+            Gizmos.DrawLine(centro - Vector3.right * 0.4f, centro + Vector3.right * 0.4f);
+            Gizmos.DrawLine(centro - Vector3.forward * 0.4f, centro + Vector3.forward * 0.4f);
+        }
+        else if (modoDelimitador == ModoDelimitador.CajaPermitida && cajaZonaSegura != null)
+        {
+            Gizmos.color = new Color(0f, 1f, 0.5f, 0.8f); // Verde zona segura
+            Gizmos.DrawWireCube(cajaZonaSegura.bounds.center, cajaZonaSegura.bounds.size);
         }
     }
 
@@ -305,7 +472,7 @@ public class PinchToWalk : MonoBehaviour
 #endif
         }
 
-        // 2. Deteccion de Pellizco de Manos de Meta XR o Gatillo de Mando
+        // 2. Deteccion de Pellizco de Manos de Meta XR o Boton/Gatillo de Mando
         bool pellizcoIzq = EsPellizcoManoIzquierda();
         bool pellizcoDer = EsPellizcoManoDerecha();
 

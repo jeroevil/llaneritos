@@ -5,100 +5,127 @@ using UnityEditor.Animations;
 using System.IO;
 
 /// <summary>
-/// Herramienta de Editor para configurar y reparar automaticamente el Animator Controller del Silbon:
-/// - Convierte 'running crawl.fbx' a Generic rig (para que coincida con el rig de silvon unity).
-/// - Extrae 'crawl.anim' con curvas de huesos reales (Transform) y bucle habilitado.
-/// - Configura los Animator Controllers ('Nuevo control silbon' y 'New Animator Controller').
-/// - Conecta la animacion de 'running crawl' al estado Crawl (acecho peces 4 a 9).
-/// - Conecta la animacion de 'zombie run' al estado Run (persecucion pez 10).
-/// - Conecta la animacion de 'zombie walk' al estado Walk (calma / caminata).
-/// - Asigna el Animator al GameObject 'silvon unity' en la escena y lo vincula al FishingSilbonDirector.
+/// Herramienta de Editor para configurar y reparar el Animator del Silbón con las animaciones de Mixamo y MoCap:
+/// - Stalking / Acecho (Peces 4 a 9): running crawl (Mixamo)
+/// - Idle: Silbon_Idle_001
+/// - Walk: Silbon_Caminando_Loop / zombie walk
+/// - Emerge: Silbon_Emerge_003 (Clímax pez 10)
+/// - Run: zombie run (Persecución pez 10)
+/// - Atrapa: Silbon_Atrapa (Jumpscare / captura)
+///
+/// Además:
+/// - Asegura que todos los FBX estén configurados en Humanoid con Avatar válido (¡elimina la pose T por completo!).
+/// - Asigna el Avatar Humanoid al GameObject del Silbón en la escena.
+/// - Configura las transiciones para que el acecho use running crawl.
+/// - Marca la escena como sucia y la guarda automáticamente.
 /// </summary>
-[InitializeOnLoad]
 public static class SilbonAnimatorSetupTool
 {
-    private const string RUTA_CONTROLLER_PRINCIPAL = "Assets/Silbon/Animaciones silbon/Nuevo control silbon.controller";
-    private const string RUTA_CONTROLLER_SECUNDARIO = "Assets/Silbon/Animaciones silbon/New Animator Controller.controller";
+    private const string RUTA_FBX_MODELO_UNITY = "Assets/Silbon/Modelo/silvon unity.fbx";
+    private const string RUTA_FBX_MODELO_RIGGED = "Assets/_Characters_Silbon/FBX/silvon rigged.fbx";
+    private const string RUTA_FBX_IDLE = "Assets/_Characters_Silbon/Animations/Silbon_Idle_001.fbx";
+    private const string RUTA_FBX_WALK = "Assets/_Characters_Silbon/Animations/Silbon_Caminando_Loop.fbx";
+    private const string RUTA_FBX_EMERGE = "Assets/_Characters_Silbon/Animations/Silbon_Emerge_003.fbx";
+    private const string RUTA_FBX_ATRAPA = "Assets/_Characters_Silbon/Animations/Silbon_Atrapa.fbx";
+    private const string RUTA_FBX_WALK_LONG = "Assets/_Characters_Silbon/Animations/Silbon_Caminando_005.fbx";
+    private const string RUTA_FBX_ZOMBIE_RUN = "Assets/Silbon/Animaciones silbon/zombie run.fbx";
+    private const string RUTA_FBX_ZOMBIE_WALK = "Assets/Silbon/Animaciones silbon/zombie walk.fbx";
     private const string RUTA_FBX_CRAWL = "Assets/Silbon/Animaciones silbon/running crawl.fbx";
-    private const string RUTA_FBX_RUN = "Assets/Silbon/Animaciones silbon/zombie run.fbx";
-    private const string RUTA_FBX_WALK = "Assets/Silbon/Animaciones silbon/zombie walk.fbx";
-    private const string RUTA_ANIM_WALK = "Assets/Silbon/Animaciones silbon/zombie walk.anim";
-    private const string RUTA_ANIM_CRAWL = "Assets/Silbon/Animaciones silbon/crawl.anim";
-    private const string RUTA_ANIM_RUN = "Assets/Silbon/Animaciones silbon/run.anim";
 
-    [InitializeOnLoadMethod]
-    private static void AutoVerificarYReparar()
-    {
-        EditorApplication.delayCall += () =>
-        {
-            var clipCrawl = AssetDatabase.LoadAssetAtPath<AnimationClip>(RUTA_ANIM_CRAWL);
-            if (!EsClipValido(clipCrawl))
-            {
-                Debug.Log("[Silbon Tool] 'crawl.anim' no es valido o no tiene curvas genericas. Ejecutando reparacion automatica...");
-                ConfigurarAnimatorCompleto();
-            }
-        };
-    }
+    private const string RUTA_CONTROLLER_MOCAP = "Assets/_Characters_Silbon/Animations/Controllers/Silbon.controller";
+    private const string RUTA_CONTROLLER_ESCENA = "Assets/Silbon/Animaciones silbon/Nuevo control silbon.controller";
 
-    [MenuItem("Llaneritos/Configurar Animator del Silbón (running crawl)", false, 1)]
-    [MenuItem("GameObject/Silbón/Configurar Animator del Silbón", false, 10)]
+    [MenuItem("Llaneritos/Configurar Animator del Silbón (Animaciones y Avatar Humanoid)", false, 1)]
+    [MenuItem("GameObject/Silbón/Configurar Animator (MoCap y Mixamo)", false, 10)]
     public static void ConfigurarAnimatorCompleto()
     {
-        Debug.Log("[Silbon Tool] Iniciando configuracion automatica de animaciones del Silbon...");
+        Debug.Log("[Silbon Tool] === Iniciando configuración de animaciones y Avatar del Silbón ===");
 
-        // 1. Asegurar importadores FBX como Genericos (No Avatar)
-        AsegurarFbxGenerico(RUTA_FBX_CRAWL);
-        AsegurarFbxGenerico(RUTA_FBX_RUN);
+        // 1. Asegurar que modelos y animaciones estén en Humanoid con Avatar creado
+        AsegurarFbxHumanoid(RUTA_FBX_MODELO_UNITY, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_MODELO_RIGGED, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_CRAWL, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_ZOMBIE_RUN, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_ZOMBIE_WALK, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_IDLE, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_WALK, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_EMERGE, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_ATRAPA, crearAvatar: true);
+        AsegurarFbxHumanoid(RUTA_FBX_WALK_LONG, crearAvatar: true);
 
-        // 2. Extraer o cargar clips con curvas de huesos reales
-        AnimationClip clipCrawl = ObtenerOGenerarClip(RUTA_FBX_CRAWL, RUTA_ANIM_CRAWL);
-        AnimationClip clipRun = ObtenerOGenerarClip(RUTA_FBX_RUN, RUTA_ANIM_RUN);
-        AnimationClip clipWalk = AssetDatabase.LoadAssetAtPath<AnimationClip>(RUTA_ANIM_WALK);
+        // 2. Ajustar loops
+        ConfigurarLoopClip(RUTA_FBX_IDLE, true);
+        ConfigurarLoopClip(RUTA_FBX_CRAWL, true);
+        ConfigurarLoopClip(RUTA_FBX_ZOMBIE_RUN, true);
+        ConfigurarLoopClip(RUTA_FBX_ZOMBIE_WALK, true);
+        ConfigurarLoopClip(RUTA_FBX_WALK, true);
+        ConfigurarLoopClip(RUTA_FBX_EMERGE, false);
+        ConfigurarLoopClip(RUTA_FBX_ATRAPA, false);
 
-        if (clipWalk == null || !EsClipValido(clipWalk))
+        // 3. Cargar Avatar Humanoid (priorizar el del modelo en escena)
+        Avatar avatarSilbon = ObtenerAvatarDeFbx(RUTA_FBX_MODELO_UNITY)
+                           ?? ObtenerAvatarDeFbx(RUTA_FBX_MODELO_RIGGED)
+                           ?? ObtenerAvatarDeFbx(RUTA_FBX_CRAWL)
+                           ?? ObtenerAvatarDeFbx(RUTA_FBX_ZOMBIE_RUN);
+
+        if (avatarSilbon == null)
         {
-            clipWalk = ObtenerOGenerarClip(RUTA_FBX_WALK, RUTA_ANIM_WALK);
+            Debug.LogError("[Silbon Tool] No se pudo encontrar un Avatar Humanoid para el Silbón.");
+        }
+        else
+        {
+            Debug.Log($"[Silbon Tool] Avatar asignado: '{avatarSilbon.name}' (Válido: {avatarSilbon.isValid}, Human: {avatarSilbon.isHuman})");
         }
 
-        if (clipCrawl == null || clipRun == null || clipWalk == null)
-        {
-            Debug.LogError($"[Silbon Tool] Error: No se pudieron preparar todos los clips. Crawl: {clipCrawl != null}, Run: {clipRun != null}, Walk: {clipWalk != null}");
-            return;
-        }
+        // 4. Cargar AnimationClips
+        AnimationClip clipCrawl = ObtenerClipDeFbx(RUTA_FBX_CRAWL, "running crawl");
+        AnimationClip clipIdle = ObtenerClipDeFbx(RUTA_FBX_IDLE, "Silbon_Idle_001") ?? ObtenerClipDeFbx(RUTA_FBX_MODELO_UNITY, "Idle");
+        AnimationClip clipWalk = ObtenerClipDeFbx(RUTA_FBX_WALK, "Silbon_Caminando_Loop") ?? ObtenerClipDeFbx(RUTA_FBX_ZOMBIE_WALK, "zombie walk");
+        AnimationClip clipEmerge = ObtenerClipDeFbx(RUTA_FBX_EMERGE, "Silbon_Emerge_003");
+        AnimationClip clipRun = ObtenerClipDeFbx(RUTA_FBX_ZOMBIE_RUN, "zombie run") ?? ObtenerClipDeFbx(RUTA_FBX_WALK_LONG, "Silbon_Caminando_005");
+        AnimationClip clipAtrapa = ObtenerClipDeFbx(RUTA_FBX_ATRAPA, "Silbon_Atrapa");
 
-        // 3. Configurar ambos AnimatorControllers (el que usa la escena y el alternativo)
-        ConfigurarUnController(RUTA_CONTROLLER_PRINCIPAL, clipWalk, clipCrawl, clipRun);
-        ConfigurarUnController(RUTA_CONTROLLER_SECUNDARIO, clipWalk, clipCrawl, clipRun);
+        if (clipCrawl == null) Debug.LogWarning($"[Silbon Tool] Clip Crawl no encontrado en {RUTA_FBX_CRAWL}");
+        if (clipIdle == null) Debug.LogWarning($"[Silbon Tool] Clip Idle no encontrado en {RUTA_FBX_IDLE}");
+        if (clipWalk == null) Debug.LogWarning($"[Silbon Tool] Clip Walk no encontrado en {RUTA_FBX_WALK}");
+        if (clipEmerge == null) Debug.LogWarning($"[Silbon Tool] Clip Emerge no encontrado en {RUTA_FBX_EMERGE}");
+        if (clipRun == null) Debug.LogWarning($"[Silbon Tool] Clip Run no encontrado en {RUTA_FBX_ZOMBIE_RUN}");
+        if (clipAtrapa == null) Debug.LogWarning($"[Silbon Tool] Clip Atrapa no encontrado en {RUTA_FBX_ATRAPA}");
+
+        // 5. Configurar los Animator Controllers
+        ConfigurarController(RUTA_CONTROLLER_MOCAP, clipIdle, clipWalk, clipEmerge, clipRun, clipAtrapa, clipCrawl);
+        ConfigurarController(RUTA_CONTROLLER_ESCENA, clipIdle, clipWalk, clipEmerge, clipRun, clipAtrapa, clipCrawl);
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
-        // 4. Asignar en escena
-        var controllerActivo = AssetDatabase.LoadAssetAtPath<AnimatorController>(RUTA_CONTROLLER_PRINCIPAL)
-                            ?? AssetDatabase.LoadAssetAtPath<AnimatorController>(RUTA_CONTROLLER_SECUNDARIO);
+        // 6. Asignar en la escena activa
+        var controllerActivo = AssetDatabase.LoadAssetAtPath<AnimatorController>(RUTA_CONTROLLER_ESCENA)
+                            ?? AssetDatabase.LoadAssetAtPath<AnimatorController>(RUTA_CONTROLLER_MOCAP);
 
         if (controllerActivo != null)
         {
-            VincularASilbonEnEscena(controllerActivo);
+            VincularASilbonEnEscena(controllerActivo, avatarSilbon);
         }
 
-        Debug.Log("[Silbon Tool] ¡Animaciones configuradas exitosamente! Crawl (running crawl), Run (zombie run), Walk (zombie walk).");
+        Debug.Log("[Silbon Tool] ¡Configuración completada con éxito! Ya no estará en Pose T y usará running crawl al acechar.");
     }
 
-    private static void AsegurarFbxGenerico(string fbxPath)
+    private static void AsegurarFbxHumanoid(string fbxPath, bool crearAvatar)
     {
         var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
         if (importer == null) return;
 
         bool dirty = false;
-        if (importer.animationType != ModelImporterAnimationType.Generic)
+        if (importer.animationType != ModelImporterAnimationType.Human)
         {
-            importer.animationType = ModelImporterAnimationType.Generic;
+            importer.animationType = ModelImporterAnimationType.Human;
             dirty = true;
         }
-        if (importer.avatarSetup != ModelImporterAvatarSetup.NoAvatar)
+
+        if (crearAvatar && importer.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel)
         {
-            importer.avatarSetup = ModelImporterAvatarSetup.NoAvatar;
+            importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             dirty = true;
         }
 
@@ -106,70 +133,68 @@ public static class SilbonAnimatorSetupTool
         {
             importer.SaveAndReimport();
             AssetDatabase.ImportAsset(fbxPath, ImportAssetOptions.ForceUpdate);
-            Debug.Log($"[Silbon Tool] FBX '{fbxPath}' reimportado como Generic (NoAvatar) para coincidir con el Silbón.");
+            Debug.Log($"[Silbon Tool] FBX '{fbxPath}' configurado como Humanoid.");
         }
     }
 
-    private static bool EsClipValido(AnimationClip clip)
+    private static void ConfigurarLoopClip(string fbxPath, bool loop)
     {
-        if (clip == null) return false;
-        var bindings = AnimationUtility.GetCurveBindings(clip);
-        if (bindings == null || bindings.Length == 0) return false;
+        var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
+        if (importer == null) return;
 
-        foreach (var b in bindings)
+        var clips = importer.clipAnimations;
+        if (clips == null || clips.Length == 0)
         {
-            if (b.type == typeof(Transform)) return true;
+            clips = importer.defaultClipAnimations;
         }
-        return false;
+
+        if (clips != null && clips.Length > 0)
+        {
+            bool modified = false;
+            foreach (var clip in clips)
+            {
+                if (clip.loopTime != loop)
+                {
+                    clip.loopTime = loop;
+                    modified = true;
+                }
+            }
+            if (modified)
+            {
+                importer.clipAnimations = clips;
+                importer.SaveAndReimport();
+                AssetDatabase.ImportAsset(fbxPath, ImportAssetOptions.ForceUpdate);
+            }
+        }
     }
 
-    private static AnimationClip ObtenerOGenerarClip(string fbxPath, string rutaAnimDestino)
+    private static Avatar ObtenerAvatarDeFbx(string fbxPath)
     {
-        // Si el archivo .anim ya existe y tiene curvas genericas validas, lo usamos
-        var clipExistente = AssetDatabase.LoadAssetAtPath<AnimationClip>(rutaAnimDestino);
-        if (EsClipValido(clipExistente))
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(fbxPath);
+        foreach (var obj in assets)
         {
-            return clipExistente;
+            if (obj is Avatar av && av.isValid) return av;
         }
-
-        // Si no es valido, extraer desde el FBX
-        AnimationClip clipEncontrado = null;
-        Object[] subAssets = AssetDatabase.LoadAllAssetsAtPath(fbxPath);
-        foreach (var sub in subAssets)
-        {
-            if (sub is AnimationClip clip && !clip.name.StartsWith("__preview__"))
-            {
-                clipEncontrado = clip;
-                break;
-            }
-        }
-
-        if (clipEncontrado != null)
-        {
-            if (File.Exists(rutaAnimDestino))
-            {
-                AssetDatabase.DeleteAsset(rutaAnimDestino);
-            }
-
-            AnimationClip copia = Object.Instantiate(clipEncontrado);
-            copia.name = Path.GetFileNameWithoutExtension(rutaAnimDestino);
-
-            var settings = AnimationUtility.GetAnimationClipSettings(copia);
-            settings.loopTime = true;
-            AnimationUtility.SetAnimationClipSettings(copia, settings);
-
-            AssetDatabase.CreateAsset(copia, rutaAnimDestino);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-
-            Debug.Log($"[Silbon Tool] Generado clip genérico '{copia.name}' en: {rutaAnimDestino}");
-            return copia;
-        }
-
         return null;
     }
 
-    private static void ConfigurarUnController(string rutaController, AnimationClip walk, AnimationClip crawl, AnimationClip run)
+    private static AnimationClip ObtenerClipDeFbx(string fbxPath, string preferedName)
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(fbxPath);
+        AnimationClip fallback = null;
+        foreach (var obj in assets)
+        {
+            if (obj is AnimationClip clip && !clip.name.StartsWith("__preview__"))
+            {
+                if (!string.IsNullOrEmpty(preferedName) && clip.name.IndexOf(preferedName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return clip;
+                if (fallback == null) fallback = clip;
+            }
+        }
+        return fallback;
+    }
+
+    private static void ConfigurarController(string rutaController, AnimationClip idle, AnimationClip walk, AnimationClip emerge, AnimationClip run, AnimationClip atrapa, AnimationClip crawl)
     {
         AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(rutaController);
         if (controller == null)
@@ -178,21 +203,109 @@ public static class SilbonAnimatorSetupTool
             Debug.Log($"[Silbon Tool] Creado nuevo AnimatorController en: {rutaController}");
         }
 
+        // Parámetros
         AsegurarParametro(controller, "Acechando", AnimatorControllerParameterType.Bool);
+        AsegurarParametro(controller, "Emergiendo", AnimatorControllerParameterType.Bool);
         AsegurarParametro(controller, "Corriendo", AnimatorControllerParameterType.Bool);
+        AsegurarParametro(controller, "Atrapando", AnimatorControllerParameterType.Bool);
         AsegurarParametro(controller, "Estado", AnimatorControllerParameterType.Int);
 
         var rootStateMachine = controller.layers[0].stateMachine;
 
-        AnimatorState stateWalk = ObtenerOCrearEstado(rootStateMachine, "Walk", walk, new Vector3(300, 50, 0));
-        AnimatorState stateCrawl = ObtenerOCrearEstado(rootStateMachine, "Crawl", crawl, new Vector3(300, 160, 0));
-        AnimatorState stateRun = ObtenerOCrearEstado(rootStateMachine, "Run", run, new Vector3(300, 270, 0));
+        // Estados
+        AnimatorState stateIdle = ObtenerOCrearEstado(rootStateMachine, "Idle", idle, new Vector3(300, 50, 0));
+        AnimatorState stateCrawl = ObtenerOCrearEstado(rootStateMachine, "Crawl", crawl ?? walk, new Vector3(300, 150, 0));
+        AnimatorState stateWalk = ObtenerOCrearEstado(rootStateMachine, "Walk", walk, new Vector3(550, 150, 0));
+        AnimatorState stateEmerge = ObtenerOCrearEstado(rootStateMachine, "Emerge", emerge, new Vector3(300, 250, 0));
+        AnimatorState stateRun = ObtenerOCrearEstado(rootStateMachine, "Run", run, new Vector3(300, 350, 0));
+        AnimatorState stateAtrapa = ObtenerOCrearEstado(rootStateMachine, "Atrapa", atrapa, new Vector3(300, 450, 0));
 
-        rootStateMachine.defaultState = stateWalk;
+        // Ajustar velocidades
+        if (stateRun != null) stateRun.speed = 1.0f;
+        if (stateEmerge != null) stateEmerge.speed = 1.0f;
+        if (stateWalk != null) stateWalk.speed = 1.0f;
+        if (stateCrawl != null) stateCrawl.speed = 1.2f;
 
-        ConfigurarTransiciones(rootStateMachine, stateWalk, stateCrawl, stateRun);
+        rootStateMachine.defaultState = stateIdle;
+
+        // Limpiar transiciones previas
+        LimpiarTransiciones(stateIdle);
+        LimpiarTransiciones(stateCrawl);
+        LimpiarTransiciones(stateWalk);
+        LimpiarTransiciones(stateEmerge);
+        LimpiarTransiciones(stateRun);
+        LimpiarTransiciones(stateAtrapa);
+        while (rootStateMachine.anyStateTransitions.Length > 0)
+            rootStateMachine.RemoveAnyStateTransition(rootStateMachine.anyStateTransitions[0]);
+
+        // --- Transiciones ---
+
+        // Idle <-> Crawl (Acecho prioritario con running crawl para peces 4..9)
+        var idleToCrawl = stateIdle.AddTransition(stateCrawl);
+        idleToCrawl.hasExitTime = false;
+        idleToCrawl.duration = 0.2f;
+        idleToCrawl.AddCondition(AnimatorConditionMode.If, 0, "Acechando");
+
+        var crawlToIdle = stateCrawl.AddTransition(stateIdle);
+        crawlToIdle.hasExitTime = false;
+        crawlToIdle.duration = 0.2f;
+        crawlToIdle.AddCondition(AnimatorConditionMode.IfNot, 0, "Acechando");
+
+        // Idle <-> Walk (Caminata secundaria o por estado)
+        var idleToWalk = stateIdle.AddTransition(stateWalk);
+        idleToWalk.hasExitTime = false;
+        idleToWalk.duration = 0.25f;
+        idleToWalk.AddCondition(AnimatorConditionMode.Equals, 1, "Estado");
+
+        var walkToIdle = stateWalk.AddTransition(stateIdle);
+        walkToIdle.hasExitTime = false;
+        walkToIdle.duration = 0.25f;
+        walkToIdle.AddCondition(AnimatorConditionMode.Equals, 0, "Estado");
+
+        // Crawl <-> Walk
+        var walkToCrawl = stateWalk.AddTransition(stateCrawl);
+        walkToCrawl.hasExitTime = false;
+        walkToCrawl.duration = 0.2f;
+        walkToCrawl.AddCondition(AnimatorConditionMode.If, 0, "Acechando");
+
+        // AnyState -> Emerge (Disparo del Pez 10)
+        var anyToEmerge = rootStateMachine.AddAnyStateTransition(stateEmerge);
+        anyToEmerge.hasExitTime = false;
+        anyToEmerge.duration = 0.15f;
+        anyToEmerge.AddCondition(AnimatorConditionMode.If, 0, "Emergiendo");
+
+        // Emerge -> Run (Cuando empieza la carrera tras emerger)
+        var emergeToRun = stateEmerge.AddTransition(stateRun);
+        emergeToRun.hasExitTime = false;
+        emergeToRun.duration = 0.25f;
+        emergeToRun.AddCondition(AnimatorConditionMode.If, 0, "Corriendo");
+
+        // Emerge -> Run por ExitTime de respaldo (si la animación termina)
+        var emergeToRunExit = stateEmerge.AddTransition(stateRun);
+        emergeToRunExit.hasExitTime = true;
+        emergeToRunExit.exitTime = 0.95f;
+        emergeToRunExit.duration = 0.25f;
+
+        // Run -> Atrapa (Cuando el Silbón alcanza al jugador)
+        var runToAtrapa = stateRun.AddTransition(stateAtrapa);
+        runToAtrapa.hasExitTime = false;
+        runToAtrapa.duration = 0.1f;
+        runToAtrapa.AddCondition(AnimatorConditionMode.If, 0, "Atrapando");
+
+        // AnyState -> Atrapa (Respaldo por si atrapa mientras emerge o corre)
+        var anyToAtrapa = rootStateMachine.AddAnyStateTransition(stateAtrapa);
+        anyToAtrapa.hasExitTime = false;
+        anyToAtrapa.duration = 0.1f;
+        anyToAtrapa.AddCondition(AnimatorConditionMode.If, 0, "Atrapando");
 
         EditorUtility.SetDirty(controller);
+    }
+
+    private static void LimpiarTransiciones(AnimatorState state)
+    {
+        if (state == null) return;
+        while (state.transitions.Length > 0)
+            state.RemoveTransition(state.transitions[0]);
     }
 
     private static void AsegurarParametro(AnimatorController controller, string nombre, AnimatorControllerParameterType tipo)
@@ -210,71 +323,33 @@ public static class SilbonAnimatorSetupTool
         {
             if (childState.state.name == nombre)
             {
-                childState.state.motion = clip;
+                if (clip != null) childState.state.motion = clip;
                 return childState.state;
             }
         }
 
         var nuevoEstado = sm.AddState(nombre, posicion);
-        nuevoEstado.motion = clip;
+        if (clip != null) nuevoEstado.motion = clip;
         return nuevoEstado;
     }
 
-    private static void ConfigurarTransiciones(AnimatorStateMachine sm, AnimatorState walk, AnimatorState crawl, AnimatorState run)
+    private static void VincularASilbonEnEscena(AnimatorController controller, Avatar avatarSilbon)
     {
-        while (walk.transitions.Length > 0) walk.RemoveTransition(walk.transitions[0]);
-        while (crawl.transitions.Length > 0) crawl.RemoveTransition(crawl.transitions[0]);
-        while (run.transitions.Length > 0) run.RemoveTransition(run.transitions[0]);
-        while (sm.anyStateTransitions.Length > 0) sm.RemoveAnyStateTransition(sm.anyStateTransitions[0]);
+        // Buscar el Silbón en la escena
+        var silbon = GameObject.Find("silvon unity") 
+                  ?? GameObject.Find("Silbon") 
+                  ?? GameObject.Find("silbon");
 
-        // Walk -> Crawl (cuando Acechando = true)
-        var walkToCrawl = walk.AddTransition(crawl);
-        walkToCrawl.hasExitTime = false;
-        walkToCrawl.duration = 0.2f;
-        walkToCrawl.AddCondition(AnimatorConditionMode.If, 0, "Acechando");
-
-        // Crawl -> Walk (cuando Acechando = false)
-        var crawlToWalk = crawl.AddTransition(walk);
-        crawlToWalk.hasExitTime = false;
-        crawlToWalk.duration = 0.25f;
-        crawlToWalk.AddCondition(AnimatorConditionMode.IfNot, 0, "Acechando");
-
-        // Walk -> Run (cuando Corriendo = true)
-        var walkToRun = walk.AddTransition(run);
-        walkToRun.hasExitTime = false;
-        walkToRun.duration = 0.2f;
-        walkToRun.AddCondition(AnimatorConditionMode.If, 0, "Corriendo");
-
-        // Run -> Walk (cuando Corriendo = false)
-        var runToWalk = run.AddTransition(walk);
-        runToWalk.hasExitTime = false;
-        runToWalk.duration = 0.25f;
-        runToWalk.AddCondition(AnimatorConditionMode.IfNot, 0, "Corriendo");
-
-        // Crawl -> Run (cuando Corriendo = true)
-        var crawlToRun = crawl.AddTransition(run);
-        crawlToRun.hasExitTime = false;
-        crawlToRun.duration = 0.15f;
-        crawlToRun.AddCondition(AnimatorConditionMode.If, 0, "Corriendo");
-
-        // Run -> Crawl (cuando Corriendo = false && Acechando = true)
-        var runToCrawl = run.AddTransition(crawl);
-        runToCrawl.hasExitTime = false;
-        runToCrawl.duration = 0.2f;
-        runToCrawl.AddCondition(AnimatorConditionMode.IfNot, 0, "Corriendo");
-        runToCrawl.AddCondition(AnimatorConditionMode.If, 0, "Acechando");
-    }
-
-    private static void VincularASilbonEnEscena(AnimatorController controller)
-    {
-        var silbon = GameObject.Find("silvon unity") ?? GameObject.Find("silbon");
         if (silbon != null)
         {
             var animator = silbon.GetComponent<Animator>();
             if (animator == null) animator = silbon.AddComponent<Animator>();
 
             animator.runtimeAnimatorController = controller;
-            animator.avatar = null; // Rig generico
+            if (avatarSilbon != null)
+            {
+                animator.avatar = avatarSilbon;
+            }
             animator.applyRootMotion = false;
             EditorUtility.SetDirty(silbon);
 
@@ -285,7 +360,15 @@ public static class SilbonAnimatorSetupTool
                 EditorUtility.SetDirty(director);
             }
 
-            Debug.Log($"[Silbon Tool] Asignado AnimatorController '{controller.name}' a '{silbon.name}' y vinculado a FishingSilbonDirector.");
+            // Marcar la escena como modificada y guardarla
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(silbon.scene);
+            UnityEditor.SceneManagement.EditorSceneManager.SaveScene(silbon.scene);
+
+            Debug.Log($"[Silbon Tool] Asignado Controller '{controller.name}' y Avatar '{animator.avatar?.name}' a '{silbon.name}'. Vinculado a FishingSilbonDirector y escena guardada.");
+        }
+        else
+        {
+            Debug.LogWarning("[Silbon Tool] No se encontró el GameObject 'silvon unity' o 'Silbon' en la escena activa.");
         }
     }
 }
