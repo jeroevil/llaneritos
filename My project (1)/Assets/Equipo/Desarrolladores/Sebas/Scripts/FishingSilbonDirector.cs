@@ -162,6 +162,10 @@ public class FishingSilbonDirector : MonoBehaviour
     private bool _chaseTriggered = false;
     private float _targetTerrorWeight = 0f;
     private float _currentTerrorWeight = 0f;
+
+    public float CurrentTerrorWeight => _currentTerrorWeight;
+    public float TargetTerrorWeight => _targetTerrorWeight;
+    public int CurrentPhase => _currentPhase;
     private Coroutine _rutinaVistazo;
     private Coroutine _rutinaClimax;
     private Coroutine _rutinaPersecucion;
