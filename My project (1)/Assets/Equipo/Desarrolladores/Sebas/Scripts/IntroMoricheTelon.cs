@@ -41,6 +41,10 @@ public class IntroMoricheTelon : MonoBehaviour
     [Range(0.3f, 3f)]
     public float duracionFade = 1.0f;
 
+    [Tooltip("Segundos que tarda el logo en aparecer (de transparente a opaco)")]
+    [Range(0.3f, 3f)]
+    public float duracionFadeIn = 1.0f;
+
     [Header("Video Tutorial (antes del logo)")]
     [Tooltip("Opcional: VideoPlayer del tutorial de controles. Si esta asignado, el video se reproduce completo dentro del telon y despues aparece el logo.")]
     public UnityEngine.Video.VideoPlayer videoTutorial;
@@ -194,11 +198,27 @@ public class IntroMoricheTelon : MonoBehaviour
         if (videoTutorial != null)
             yield return RutinaVideoTutorial();
 
-        // 1. Tiempo que el logo permanece 100% visible
-        yield return new WaitForSeconds(tiempoVisible);
-        // 2. Fade Out de transparencia del logo
-        float t = 0f;
         Vector3 escalaInicial = (logoMoriche != null) ? logoMoriche.transform.localScale : Vector3.one;
+
+        // 1. Fade In: el logo aparece de transparente a opaco, creciendo un poco (el fade out al reves)
+        float t = 0f;
+        while (t < duracionFadeIn)
+        {
+            t += Time.deltaTime;
+            float factor = Mathf.SmoothStep(0f, 1f, t / duracionFadeIn);
+            ActualizarAlfaLogo(factor);
+            if (logoMoriche != null)
+                logoMoriche.transform.localScale = escalaInicial * Mathf.Lerp(0.92f, 1.0f, factor);
+            yield return null;
+        }
+        ActualizarAlfaLogo(1f);
+        if (logoMoriche != null)
+            logoMoriche.transform.localScale = escalaInicial;
+
+        // 2. Tiempo que el logo permanece 100% visible
+        yield return new WaitForSeconds(tiempoVisible);
+        // 3. Fade Out de transparencia del logo
+        t = 0f;
 
         while (t < duracionFade)
         {
@@ -277,7 +297,7 @@ public class IntroMoricheTelon : MonoBehaviour
         videoTutorial.isLooping = false;
         videoTutorial.Prepare();
         float espera = 0f;
-        while (!videoTutorial.isPrepared && espera < 5f)
+        while (!videoTutorial.isPrepared && espera < 15f)
         {
             espera += Time.unscaledDeltaTime;
             yield return null;
@@ -288,8 +308,18 @@ public class IntroMoricheTelon : MonoBehaviour
         videoTutorial.loopPointReached += alTerminar;
         videoTutorial.Play();
 
+        // si la carga fue lenta, Play puede perderse: se reintenta hasta que el video avance
+        float arranque = 0f;
+        while (videoTutorial.frame < 0 && arranque < 5f)
+        {
+            arranque += Time.unscaledDeltaTime;
+            if (!videoTutorial.isPlaying && videoTutorial.isPrepared) videoTutorial.Play();
+            yield return null;
+        }
+
         // respaldo por si el evento no llega: la duracion del clip mas un margen
-        float limite = videoTutorial.length > 0 ? (float)videoTutorial.length + 2f : 60f;
+        double duracion = videoTutorial.clip != null ? videoTutorial.clip.length : videoTutorial.length;
+        float limite = duracion > 0 ? (float)duracion + 2f : 60f;
         float t = 0f;
         while (!terminado && t < limite)
         {
@@ -306,8 +336,9 @@ public class IntroMoricheTelon : MonoBehaviour
 
         if (logoMoriche != null)
         {
+            // se prende transparente: el fade in de RutinaIntro lo hace aparecer
             logoMoriche.SetActive(true);
-            ActualizarAlfaLogo(1.0f);
+            ActualizarAlfaLogo(0f);
         }
     }
 
