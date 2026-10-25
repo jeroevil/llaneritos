@@ -3,15 +3,16 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Controlador de la Barra de Progreso de Pesca para la escena de Sebas.
-/// Se vincula automáticamente con la jerarquía del Canvas y con FishingSilbonDirector:
-/// - Aumenta el progreso suavemente conforme se meten peces al barril.
-/// - Genera un efecto de rebote ("Punch Scale") y partículas al depositar un pez.
-/// - Reacciona al cambio de atmósfera (de calma a terror/Silbón):
-///     * Transición y disolución alfa entre Relleno Bueno y Relleno Malvado.
-///     * Cambio de color progresivo en contornos e iconos hacia tonos de sangre/pesadilla.
-///     * Temblor y pulsación siniestra (latido) al acercarse al clímax.
-/// - Incluye modo Billboard para Realidad Virtual (VR).
+/// Controlador completo de la Barra de Progreso de Pesca para la escena de Sebas.
+/// Configurado con la estructura exacta de 4 rellenos progresivos y 2 rellenos de iconos:
+/// - Relleno Bueno 1: Peces 1 a 3 (Verde / Calma inicial)
+/// - Relleno Bueno 2: Peces 4 a 6 (Amarillo / Alerta / Inicio de acecho)
+/// - Relleno Bueno 3: Peces 7 a 9 (Naranja / Tensión alta previa al clímax)
+/// - Relleno Final Malvado: Pez 10 (Rojo sangre / Clímax persecución)
+/// - Relleno Iconos Bueno: Peces 1 a 9
+/// - Relleno Iconos Malo: Pez 10 (Se corrompen los círculos de hitos)
+/// - Iconos superiores, contornos y divisiones.
+/// - Sistema de impacto (Punch Scale), temblor de terror y Billboard en VR.
 /// </summary>
 [DisallowMultipleComponent]
 [AddComponentMenu("Llaneritos/UI/Barra de Progreso de Pesca (FishingProgressBarUI)")]
@@ -21,38 +22,57 @@ public class FishingProgressBarUI : MonoBehaviour
     [Tooltip("El director de pesca y Silbón en la escena. Si está vacío, se busca automáticamente.")]
     public FishingSilbonDirector director;
 
-    [Header("Elementos de la Jerarquía (Auto-buscados si están vacíos)")]
+    [Header("Estructura de la Barra")]
     [Tooltip("El RectTransform padre de todos los elementos visuales de la barra.")]
     public RectTransform rootBarra;
 
     [Tooltip("Imagen de fondo base de la barra.")]
     public Image fondoBase;
 
-    [Tooltip("Imagen del relleno bueno (progreso normal en calma). Debe estar en modo Filled Horizontal.")]
-    public Image rellenoBueno;
-
-    [Tooltip("Imagen del relleno malvado (progreso siniestro de terror). Debe estar en modo Filled Horizontal.")]
-    public Image rellenoMalvado;
-
-    [Tooltip("Imagen de las líneas divisorias de la barra.")]
-    public Image divisiones;
-
-    [Tooltip("Imagen del contorno/marco de la barra.")]
+    [Tooltip("Imagen del marco exterior de la barra.")]
     public Image contornoBarra;
 
-    [Tooltip("Imagen de los contornos de los círculos superiores de hitos.")]
+    [Tooltip("Líneas divisorias internas de los peces.")]
+    public Image divisiones;
+
+    [Header("Los 4 Rellenos de la Barra (Llenado Horizontal Izq -> Der)")]
+    [Tooltip("Relleno activo en los primeros 3 peces (1 a 3). Color verde / calma.")]
+    public Image rellenoBueno1;
+
+    [Tooltip("Relleno activo en los peces 4 a 6. Color amarillo / acecho.")]
+    public Image rellenoBueno2;
+
+    [Tooltip("Relleno activo en los peces 7 a 9. Color naranja / tensión alta.")]
+    public Image rellenoBueno3;
+
+    [Tooltip("Relleno activo en el décimo pez (10). Color rojo sangre siniestro.")]
+    public Image rellenoFinalMalvado;
+
+    [Header("Círculos de Hitos e Iconos")]
+    [Tooltip("Marco/contorno de los círculos superiores de iconos.")]
     public Image contornoCirculos;
 
-    [Tooltip("Imagen de los iconos dentro de los círculos.")]
+    [Tooltip("Relleno de los círculos de hitos en estado bueno (peces 1 a 9).")]
+    public Image rellenoIconosBueno;
+
+    [Tooltip("Relleno de los círculos de hitos en estado malvado (pez 10).")]
+    public Image rellenoIconosMalo;
+
+    [Tooltip("Iconos que van encima de los círculos.")]
     public Image iconos;
 
+    [Header("Partículas y Efectos")]
     [Tooltip("Sistema de partículas que acompaña los eventos de la barra.")]
     public ParticleSystem particulasAdicionales;
 
-    [Header("Configuración de Llenado Suave")]
+    [Header("Configuración de Llenado y Transición")]
     [Tooltip("Tiempo en segundos que tarda la barra en deslizarse suavemente hacia el nuevo valor.")]
     [Range(0.05f, 1.0f)]
     public float duracionSuavizado = 0.35f;
+
+    [Tooltip("Velocidad de transición/disolución suave entre un color de relleno y el siguiente.")]
+    [Range(1.0f, 10.0f)]
+    public float velocidadTransicionRellenos = 4.0f;
 
     [Tooltip("Escala multiplicadora al depositar un pez (efecto de pop/punch).")]
     [Range(1.0f, 1.3f)]
@@ -62,18 +82,15 @@ public class FishingProgressBarUI : MonoBehaviour
     [Range(0.1f, 0.6f)]
     public float duracionImpacto = 0.25f;
 
-    [Header("Comportamiento del Estado Malvado / Terror")]
-    [Tooltip("Color de contornos e iconos durante la fase de calma diurna.")]
-    public Color colorCalma = Color.white;
+    [Header("Comportamiento de Terror (Silbón)")]
+    [Tooltip("Tinte rojizo en marco y divisiones cuando se acerca el clímax.")]
+    public Color colorTinteTerror = new Color(0.95f, 0.25f, 0.25f, 1.0f);
 
-    [Tooltip("Color de contornos e iconos cuando el ambiente se vuelve hostil/rojo.")]
-    public Color colorTerror = new Color(0.95f, 0.28f, 0.28f, 1.0f);
-
-    [Tooltip("Velocidad de transición entre el estado bueno y el malvado.")]
-    public float velocidadTransicionMala = 2.0f;
+    [Tooltip("Si está activo, el temblor solo ocurre de arriba a abajo (eje Y), eliminando sacudidas horizontales.")]
+    public bool temblorSoloVertical = true;
 
     [Tooltip("Intensidad del temblor errático cuando el Silbón acecha.")]
-    public float intensidadTemblor = 4.0f;
+    public float intensidadTemblor = 3.0f;
 
     [Tooltip("Velocidad de oscilación del temblor siniestro.")]
     public float velocidadTemblor = 18.0f;
@@ -94,11 +111,17 @@ public class FishingProgressBarUI : MonoBehaviour
     [Tooltip("Transform de la cámara del jugador. Si está vacío, busca Camera.main.")]
     public Transform camaraJugador;
 
-    // Estados internos
+    // Estados internos de interpolación
     private int _ultimoPeces = -1;
     private float _fillActual = 0f;
     private float _fillVelocidad = 0f;
-    private float _pesoMaloActual = 0f;
+    private float _alphaB1 = 1f;
+    private float _alphaB2 = 0f;
+    private float _alphaB3 = 0f;
+    private float _alphaMal = 0f;
+    private float _alphaIconosBueno = 1f;
+    private float _alphaIconosMalo = 0f;
+
     private Vector3 _escalaOriginalRoot = Vector3.one;
     private Vector3 _posicionOriginalRoot = Vector3.zero;
     private Coroutine _rutinaRebote;
@@ -118,21 +141,20 @@ public class FishingProgressBarUI : MonoBehaviour
             _posicionOriginalRoot = rootBarra.localPosition;
         }
 
-        // Configurar imágenes de relleno en modo Filled
-        ConfigurarModoFilled(rellenoBueno);
-        ConfigurarModoFilled(rellenoMalvado);
+        // Asegurar modo Filled Horizontal en los 4 rellenos de la barra
+        ConfigurarModoFilled(rellenoBueno1);
+        ConfigurarModoFilled(rellenoBueno2);
+        ConfigurarModoFilled(rellenoBueno3);
+        ConfigurarModoFilled(rellenoFinalMalvado);
 
-        // Estado inicial de rellenos
-        if (rellenoBueno != null)
-        {
-            rellenoBueno.fillAmount = 0f;
-            SetAlpha(rellenoBueno, 1f);
-        }
-        if (rellenoMalvado != null)
-        {
-            rellenoMalvado.fillAmount = 0f;
-            SetAlpha(rellenoMalvado, 0f);
-        }
+        // Estado visual inicial
+        SetAlpha(rellenoBueno1, 1f);
+        SetAlpha(rellenoBueno2, 0f);
+        SetAlpha(rellenoBueno3, 0f);
+        SetAlpha(rellenoFinalMalvado, 0f);
+
+        SetAlpha(rellenoIconosBueno, 1f);
+        SetAlpha(rellenoIconosMalo, 0f);
     }
 
     private void Start()
@@ -148,21 +170,20 @@ public class FishingProgressBarUI : MonoBehaviour
             _ultimoPeces = director.currentFishCount;
             float targetFill = director.totalFishNeeded > 0 ? (float)director.currentFishCount / director.totalFishNeeded : 0f;
             _fillActual = targetFill;
-            if (rellenoBueno != null) rellenoBueno.fillAmount = _fillActual;
-            if (rellenoMalvado != null) rellenoMalvado.fillAmount = _fillActual;
+            ActualizarFillEnRellenos(_fillActual);
         }
     }
 
     private void Update()
     {
         ActualizarProgresoPesca();
-        ActualizarEstadoMalvado();
+        ActualizarFasesYRellenos();
         AplicarEfectosVisualesTerror();
         AplicarBillboardVR();
     }
 
     /// <summary>
-    /// Monitorea los peces en el barril y anima suavemente el avance.
+    /// Calcula el fillAmount según los peces y anima suavemente el avance.
     /// </summary>
     private void ActualizarProgresoPesca()
     {
@@ -172,88 +193,126 @@ public class FishingProgressBarUI : MonoBehaviour
         int totalNecesario = Mathf.Max(1, director.totalFishNeeded);
         float fillObjetivo = Mathf.Clamp01((float)pecesActuales / totalNecesario);
 
-        // Detectar si entró un nuevo pez para disparar impacto visual
+        // Si entró un nuevo pez, disparar pop/rebote
         if (_ultimoPeces >= 0 && pecesActuales > _ultimoPeces)
         {
             DispararImpactoPez();
         }
         _ultimoPeces = pecesActuales;
 
-        // Interpolación suave del fillAmount
+        // Deslizamiento suave
         _fillActual = Mathf.SmoothDamp(_fillActual, fillObjetivo, ref _fillVelocidad, duracionSuavizado);
+        ActualizarFillEnRellenos(_fillActual);
+    }
 
-        if (rellenoBueno != null)
-            rellenoBueno.fillAmount = _fillActual;
-
-        if (rellenoMalvado != null)
-            rellenoMalvado.fillAmount = _fillActual;
+    private void ActualizarFillEnRellenos(float fill)
+    {
+        if (rellenoBueno1 != null) rellenoBueno1.fillAmount = fill;
+        if (rellenoBueno2 != null) rellenoBueno2.fillAmount = fill;
+        if (rellenoBueno3 != null) rellenoBueno3.fillAmount = fill;
+        if (rellenoFinalMalvado != null) rellenoFinalMalvado.fillAmount = fill;
     }
 
     /// <summary>
-    /// Calcula y transiciona el peso de transformación malvada según el director.
+    /// Maneja la activación y cross-fade suave entre los 4 rellenos de barra y los 2 de iconos.
     /// </summary>
-    private void ActualizarEstadoMalvado()
+    private void ActualizarFasesYRellenos()
     {
         if (director == null) return;
 
-        // Leer el peso de terror del director
-        float pesoTerrorObjetivo = director.CurrentTerrorWeight;
+        int peces = director.currentFishCount;
 
-        // Respaldo de cálculo si el director aún no elevó el terror
-        if (director.totalFishNeeded > 0)
+        // Alphas objetivo según el rango de peces
+        float targetB1 = 0f;
+        float targetB2 = 0f;
+        float targetB3 = 0f;
+        float targetMal = 0f;
+
+        float targetIconoBueno = 1f;
+        float targetIconoMalo = 0f;
+
+        if (peces <= 3)
         {
-            int pezInicioAcecho = director.pezInicioAcecho;
-            if (director.currentFishCount >= pezInicioAcecho)
-            {
-                float progresoAcecho = (float)(director.currentFishCount - pezInicioAcecho) / (director.totalFishNeeded - pezInicioAcecho);
-                pesoTerrorObjetivo = Mathf.Max(pesoTerrorObjetivo, Mathf.Clamp01(progresoAcecho));
-            }
+            // Fase 1: Calma (Peces 0 a 3)
+            targetB1 = 1f;
+            targetIconoBueno = 1f;
+            targetIconoMalo = 0f;
+        }
+        else if (peces >= 4 && peces <= 6)
+        {
+            // Fase 2: Acecho (Peces 4 a 6)
+            targetB2 = 1f;
+            targetIconoBueno = 1f;
+            targetIconoMalo = 0f;
+        }
+        else if (peces >= 7 && peces <= 9)
+        {
+            // Fase 3: Tensión previa al clímax (Peces 7 a 9)
+            targetB3 = 1f;
+            targetIconoBueno = 1f;
+            targetIconoMalo = 0f;
+        }
+        else // peces >= 10
+        {
+            // Fase 4: Clímax terror total / Persecución
+            targetMal = 1f;
+            targetIconoBueno = 0f;
+            targetIconoMalo = 1f;
         }
 
-        // Si ya comenzó la persecución o llegamos al 100%, terror total
-        if (director.currentFishCount >= director.totalFishNeeded)
-            pesoTerrorObjetivo = 1.0f;
+        // Transición suave de transparencia (Alpha)
+        float step = Time.deltaTime * velocidadTransicionRellenos;
+        _alphaB1 = Mathf.MoveTowards(_alphaB1, targetB1, step);
+        _alphaB2 = Mathf.MoveTowards(_alphaB2, targetB2, step);
+        _alphaB3 = Mathf.MoveTowards(_alphaB3, targetB3, step);
+        _alphaMal = Mathf.MoveTowards(_alphaMal, targetMal, step);
 
-        // Suavizar la transición hacia el estado malvado
-        _pesoMaloActual = Mathf.MoveTowards(_pesoMaloActual, pesoTerrorObjetivo, Time.deltaTime * velocidadTransicionMala);
+        _alphaIconosBueno = Mathf.MoveTowards(_alphaIconosBueno, targetIconoBueno, step);
+        _alphaIconosMalo = Mathf.MoveTowards(_alphaIconosMalo, targetIconoMalo, step);
 
-        // Cross-fade entre Relleno Bueno y Relleno Malvado
-        if (rellenoBueno != null)
-            SetAlpha(rellenoBueno, 1f - _pesoMaloActual);
+        SetAlpha(rellenoBueno1, _alphaB1);
+        SetAlpha(rellenoBueno2, _alphaB2);
+        SetAlpha(rellenoBueno3, _alphaB3);
+        SetAlpha(rellenoFinalMalvado, _alphaMal);
 
-        if (rellenoMalvado != null)
-            SetAlpha(rellenoMalvado, _pesoMaloActual);
+        SetAlpha(rellenoIconosBueno, _alphaIconosBueno);
+        SetAlpha(rellenoIconosMalo, _alphaIconosMalo);
 
-        // Tinte de color en los contornos e iconos
-        Color colorActual = Color.Lerp(colorCalma, colorTerror, _pesoMaloActual);
+        // Tinte de marcos cuando llega al estado malvado
+        if (contornoBarra != null)
+            contornoBarra.color = Color.Lerp(Color.white, colorTinteTerror, _alphaMal);
 
-        if (contornoBarra != null) contornoBarra.color = colorActual;
-        if (contornoCirculos != null) contornoCirculos.color = colorActual;
-        if (iconos != null) iconos.color = colorActual;
-        if (divisiones != null) divisiones.color = colorActual;
+        if (divisiones != null)
+            divisiones.color = Color.Lerp(Color.white, colorTinteTerror, _alphaMal);
     }
 
     /// <summary>
-    /// Aplica temblores siniestros y latido rítmico conforme el terror se apodera del entorno.
+    /// Aplica temblores y pulsación siniestra conforme el terror crece.
     /// </summary>
     private void AplicarEfectosVisualesTerror()
     {
-        if (rootBarra == null) return;
+        if (rootBarra == null || director == null) return;
 
-        // Temblor por vibración del Silbón (Perlin Noise)
+        int peces = director.currentFishCount;
+        float factorTerror = 0f;
+
+        if (peces >= 4)
+            factorTerror = Mathf.Clamp01((float)(peces - 3) / 7f);
+
+        // Temblor procedural (Perlin Noise) a partir de pez 7 o en pez 10 (exclusivamente vertical de arriba a abajo)
         Vector3 offsetTemblor = Vector3.zero;
-        if (_pesoMaloActual > 0.15f)
+        if (peces >= 7)
         {
-            float noiseX = (Mathf.PerlinNoise(Time.time * velocidadTemblor, 0f) - 0.5f) * 2f;
+            float noiseX = temblorSoloVertical ? 0f : (Mathf.PerlinNoise(Time.time * velocidadTemblor, 0f) - 0.5f) * 2f;
             float noiseY = (Mathf.PerlinNoise(0f, Time.time * velocidadTemblor) - 0.5f) * 2f;
-            offsetTemblor = new Vector3(noiseX, noiseY, 0f) * (intensidadTemblor * _pesoMaloActual);
+            offsetTemblor = new Vector3(noiseX * (intensidadTemblor * factorTerror), noiseY * (intensidadTemblor * factorTerror), 0f);
         }
 
-        // Latido o pulsación siniestra
+        // Latido rítmico
         float multiplicadorLatido = 1f;
-        if (activarPulsacionLatido && _pesoMaloActual > 0.35f)
+        if (activarPulsacionLatido && peces >= 7)
         {
-            multiplicadorLatido = 1f + Mathf.Sin(Time.time * frecuenciaLatido) * (0.04f * _pesoMaloActual);
+            multiplicadorLatido = 1f + Mathf.Sin(Time.time * frecuenciaLatido) * (0.035f * factorTerror);
         }
 
         if (_rutinaRebote == null)
@@ -282,7 +341,7 @@ public class FishingProgressBarUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Reacción jugosa al meter un pez: rebote de escala y ráfaga de partículas.
+    /// Reacción de rebote (pop) y partículas al meter un pez.
     /// </summary>
     public void DispararImpactoPez()
     {
@@ -305,7 +364,6 @@ public class FishingProgressBarUI : MonoBehaviour
         Vector3 escalaMax = _escalaOriginalRoot * escalaImpacto;
         float mitadDuracion = duracionImpacto * 0.4f;
 
-        // Subida rápida
         float t = 0f;
         while (t < mitadDuracion)
         {
@@ -314,7 +372,6 @@ public class FishingProgressBarUI : MonoBehaviour
             yield return null;
         }
 
-        // Regreso suave
         t = 0f;
         float duracionRegreso = duracionImpacto - mitadDuracion;
         while (t < duracionRegreso)
@@ -345,7 +402,7 @@ public class FishingProgressBarUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Busca y enlaza automáticamente todos los componentes de la jerarquía por nombre.
+    /// Auto-vincula todas las referencias buscando por los nombres exactos en la jerarquía.
     /// </summary>
     [ContextMenu("Auto-Vincular Jerarquía")]
     public void AutoVincularReferencias()
@@ -358,39 +415,67 @@ public class FishingProgressBarUI : MonoBehaviour
 
         Transform contenedor = rootBarra != null ? rootBarra.transform : transform;
 
-        if (fondoBase == null) fondoBase = BuscarHijoImage(contenedor, "Fondo base");
-        if (rellenoBueno == null) rellenoBueno = BuscarHijoImage(contenedor, "Relleno bueno");
-        if (rellenoMalvado == null) rellenoMalvado = BuscarHijoImage(contenedor, "Relleno malvado");
-        if (divisiones == null) divisiones = BuscarHijoImage(contenedor, "Divisiones");
-        if (contornoBarra == null) contornoBarra = BuscarHijoImage(contenedor, "Contorno barra");
-        if (contornoCirculos == null) contornoCirculos = BuscarHijoImage(contenedor, "Contorno circulos");
-        if (iconos == null) iconos = BuscarHijoImage(contenedor, "Iconos");
+        // Fondo y contornos principales
+        if (fondoBase == null) fondoBase = BuscarHijoImage(contenedor, "Fondo base", "fondo");
+        if (contornoBarra == null) contornoBarra = BuscarHijoImage(contenedor, "Contorno barra", "contorno");
+        if (divisiones == null) divisiones = BuscarHijoImage(contenedor, "Divisiones", "divisiones barra");
 
+        // Los 4 rellenos de barra
+        if (rellenoBueno1 == null) rellenoBueno1 = BuscarHijoImage(contenedor, "bueno 1", "Relleno bueno barra 1", "relleno bueno 1", "bueno1");
+        if (rellenoBueno2 == null) rellenoBueno2 = BuscarHijoImage(contenedor, "bueno 2", "Relleno bueno barra 2", "relleno bueno 2", "bueno2");
+        if (rellenoBueno3 == null) rellenoBueno3 = BuscarHijoImage(contenedor, "bueno 3", "Relleno bueno barra 3", "relleno bueno 3", "bueno3");
+        if (rellenoFinalMalvado == null) rellenoFinalMalvado = BuscarHijoImage(contenedor, "relleno final malvado", "Relleno final malvado barra", "relleno malvado", "malvado");
+
+        // Círculos de hitos e iconos
+        if (contornoCirculos == null) contornoCirculos = BuscarHijoImage(contenedor, "Contorno circulos", "contorno de los iconos", "Contorno círculo icono");
+        if (rellenoIconosBueno == null) rellenoIconosBueno = BuscarHijoImage(contenedor, "relleno iconos bueno", "Relleno bueno contorno círculo icono", "iconos bueno");
+        if (rellenoIconosMalo == null) rellenoIconosMalo = BuscarHijoImage(contenedor, "relleno iconos malo", "Relleno malo", "Relleno malo .png", "iconos malo");
+        if (iconos == null) iconos = BuscarHijoImage(contenedor, "Iconos", "icono");
+
+        // Partículas
         if (particulasAdicionales == null)
         {
-            Transform tPart = contenedor.Find("particulas adicionales") ?? transform.Find("particulas adicionales");
+            Transform tPart = contenedor.Find("particulas adicionales") ?? contenedor.Find("particulas") ?? transform.Find("particulas adicionales");
             if (tPart != null) particulasAdicionales = tPart.GetComponent<ParticleSystem>();
         }
 
         if (director == null)
             director = FindFirstObjectByType<FishingSilbonDirector>();
 
-        // Asegurar modo Filled en los rellenos
-        ConfigurarModoFilled(rellenoBueno);
-        ConfigurarModoFilled(rellenoMalvado);
+        // Asegurar modo Filled en los 4 rellenos de la barra
+        ConfigurarModoFilled(rellenoBueno1);
+        ConfigurarModoFilled(rellenoBueno2);
+        ConfigurarModoFilled(rellenoBueno3);
+        ConfigurarModoFilled(rellenoFinalMalvado);
     }
 
-    private Image BuscarHijoImage(Transform padre, string nombre)
+    private Image BuscarHijoImage(Transform padre, params string[] posiblesNombres)
     {
         if (padre == null) return null;
-        Transform hijo = padre.Find(nombre);
-        if (hijo != null) return hijo.GetComponent<Image>();
 
-        // Búsqueda insensible a mayúsculas/espacios
+        // Búsqueda directa
+        foreach (var nom in posiblesNombres)
+        {
+            Transform hijo = padre.Find(nom);
+            if (hijo != null)
+            {
+                Image img = hijo.GetComponent<Image>();
+                if (img != null) return img;
+            }
+        }
+
+        // Búsqueda insensible a mayúsculas
         foreach (Transform child in padre)
         {
-            if (child.name.Trim().ToLower().Equals(nombre.Trim().ToLower()))
-                return child.GetComponent<Image>();
+            string childName = child.name.Trim().ToLower();
+            foreach (var nom in posiblesNombres)
+            {
+                if (childName.Equals(nom.Trim().ToLower()) || childName.Contains(nom.Trim().ToLower()))
+                {
+                    Image img = child.GetComponent<Image>();
+                    if (img != null) return img;
+                }
+            }
         }
         return null;
     }
@@ -410,10 +495,11 @@ public class FishingProgressBarUI : MonoBehaviour
             director.SetProgressNormalized(0f);
     }
 
-    [ContextMenu("Probar Terror al 100%")]
-    private void DebugTerrorTotal()
+    [ContextMenu("Probar Pez 10 (Clímax)")]
+    private void DebugPez10()
     {
-        _pesoMaloActual = 1.0f;
+        if (director != null)
+            director.SetProgressNormalized(1f);
     }
 #endif
 }
