@@ -1815,6 +1815,7 @@ Transform:
   - {fileID: 23337763}
   - {fileID: 256119232}
   - {fileID: 1940802331}
+  - {fileID: 1629289048}
   m_Father: {fileID: 339944}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &41330674
@@ -6847,12 +6848,17 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
+--- !u!1 &206863078 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8742440922329609989, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+  m_PrefabInstance: {fileID: 1820341695}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &206863079 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 4450987822766331127, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
   m_PrefabInstance: {fileID: 1820341695}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 206863078}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 222b15216b0ae98449fc65d1b9793a25, type: 3}
@@ -8898,7 +8904,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 336461328138164288, guid: 266be8499a542694faa6325f73a927a1, type: 3}
       propertyPath: m_Name
-      value: Hermano (exhibicion) (1)
+      value: Hermano dialogos de mejorar red
       objectReference: {fileID: 0}
     - target: {fileID: 1144065380875272954, guid: 266be8499a542694faa6325f73a927a1, type: 3}
       propertyPath: m_LocalScale.x
@@ -13256,7 +13262,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: eab372dc4d618464da578f58fa1c7b4c, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:
@@ -25856,6 +25862,7 @@ GameObject:
   - component: {fileID: 943990105}
   - component: {fileID: 943990104}
   - component: {fileID: 943990107}
+  - component: {fileID: 943990108}
   m_Layer: 0
   m_Name: Director_juego
   m_TagString: Untagged
@@ -25998,6 +26005,33 @@ MonoBehaviour:
   duracionFadeOutSilbido: 0.8
   espacialidadSilbato: 0.6
   usarAudioMixer: 0
+--- !u!114 &943990108
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 943990103}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15282d82547b5b242b84120cfe89b3f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AparicionPorPeces
+  director: {fileID: 943990104}
+  pezRequerido: 4
+  objetosAMostrar:
+  - {fileID: 1449568805}
+  - {fileID: 1397952872}
+  - {fileID: 1940802332}
+  - {fileID: 1764029884}
+  - {fileID: 1077940771}
+  - {fileID: 206863078}
+  - {fileID: 1108362525}
+  - {fileID: 1312529691}
+  ocultarAlIniciar: 1
+  alAparecer:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &951546850
 GameObject:
   m_ObjectHideFlags: 0
@@ -29485,7 +29519,7 @@ GameObject:
   - component: {fileID: 1077940773}
   - component: {fileID: 1077940772}
   m_Layer: 0
-  m_Name: Text herms2
+  m_Name: Texto trigger que te dice q tienes los peces necesarios
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -29977,6 +30011,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1101862276}
+  - component: {fileID: 1101862277}
   m_Layer: 0
   m_Name: Hermano en la banca
   m_TagString: Untagged
@@ -30002,6 +30037,33 @@ Transform:
   - {fileID: 1023264579}
   m_Father: {fileID: 2126117682}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1101862277
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1101862275}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a83674b09e2541819c628e9305df22aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueController
+  listaDialogos:
+  - {fileID: 1790579142}
+  - {fileID: 1542134265}
+  - {fileID: 1023264578}
+  flechaAnterior: {fileID: 801218133}
+  flechaSiguiente: {fileID: 145596529}
+  ocultarAlCompletar: 1
+  ocultarFlechaAnteriorEnInicio: 1
+  alCambiarDialogo:
+    m_PersistentCalls:
+      m_Calls: []
+  alCompletarTodosLosDialogos:
+    m_PersistentCalls:
+      m_Calls: []
+  habilitarTeclasDebug: 1
 --- !u!1 &1102624950
 GameObject:
   m_ObjectHideFlags: 0
@@ -30216,12 +30278,17 @@ Transform:
   - {fileID: 1821597585}
   m_Father: {fileID: 845927936}
   m_LocalEulerAnglesHint: {x: 0, y: -164.985, z: 0}
+--- !u!1 &1108362525 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8742440922329609989, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+  m_PrefabInstance: {fileID: 1271439}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &1108362526 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 4450987822766331127, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
   m_PrefabInstance: {fileID: 1271439}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 1108362525}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 222b15216b0ae98449fc65d1b9793a25, type: 3}
@@ -30478,6 +30545,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: 'mesa '
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 062c4b0b2678b00419c8f0f38f04a3e6, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:
     - {fileID: -8700617353114198275, guid: 062c4b0b2678b00419c8f0f38f04a3e6, type: 3}
@@ -30487,6 +30558,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 062c4b0b2678b00419c8f0f38f04a3e6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2039530132}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 062c4b0b2678b00419c8f0f38f04a3e6, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2039530134}
   m_SourcePrefab: {fileID: 100100000, guid: 062c4b0b2678b00419c8f0f38f04a3e6, type: 3}
 --- !u!1 &1124594783
 GameObject:
@@ -41515,7 +41589,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4415776982701472058, guid: e0564ad8b619b8946bd4a5941b9948aa, type: 3}
       propertyPath: m_Name
-      value: Hermana (exhibicion) (1)
+      value: Hermana dialogos de mejorar red
       objectReference: {fileID: 0}
     - target: {fileID: 4991252127545127682, guid: e0564ad8b619b8946bd4a5941b9948aa, type: 3}
       propertyPath: m_UpdateWhenOffscreen
@@ -48002,6 +48076,101 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!1001 &1629289047
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 41287325}
+    m_Modifications:
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.89335006
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.8933499
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.89334995
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2.09
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 2.43
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 90
+      objectReference: {fileID: 0}
+    - target: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8742440922329609989, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+      propertyPath: m_Name
+      value: Boton para mejorar red
+      objectReference: {fileID: 0}
+    m_RemovedComponents:
+    - {fileID: 4450987822766331127, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+--- !u!4 &1629289048 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5153246244554497048, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+  m_PrefabInstance: {fileID: 1629289047}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &1629289049 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8742440922329609989, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+  m_PrefabInstance: {fileID: 1629289047}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1629289050 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8960656557744386018, guid: 130827a0a4d57694ca1c503aad91984b, type: 3}
+  m_PrefabInstance: {fileID: 1629289047}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1629289049}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb86ba9d4c5126e48bfef9b0c9550e9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.RayInteractable
 --- !u!1 &1634050213
 GameObject:
   m_ObjectHideFlags: 0
@@ -63552,6 +63721,7 @@ GameObject:
   - component: {fileID: 2021478247}
   - component: {fileID: 2021478246}
   - component: {fileID: 2021478245}
+  - component: {fileID: 2021478250}
   m_Layer: 0
   m_Name: Red Pesca
   m_TagString: Untagged
@@ -63597,7 +63767,7 @@ MonoBehaviour:
   pecesMaximos: 3
   pecesTope: 6
   escalaPezEnRed: 0.5
-  mesa: {fileID: 0}
+  mesa: {fileID: 2039530134}
   escalaEnMesa: 0.42
   tiempoDespliegue: 0.6
   alCaerAlAgua:
@@ -63704,6 +63874,46 @@ Transform:
   - {fileID: 1693416391}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2021478250
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2021478244}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 593d95747346f48459f50b8d6524e59f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MejoraRed
+  director: {fileID: 943990104}
+  redPesca: {fileID: 2021478245}
+  mallaRed: {fileID: 384633141}
+  interactable: {fileID: 1629289050}
+  objetoBoton: {fileID: 1629289049}
+  niveles:
+  - pezRequerido: 0
+    material: {fileID: 2100000, guid: 5caaedd5fbf43424db4d14087ca6a483, type: 2}
+    pecesMinimos: 1
+    pecesMaximos: 2
+    pecesTope: 6
+  - pezRequerido: 4
+    material: {fileID: 2100000, guid: 9d07e4299b78c1545a575340d13a9335, type: 2}
+    pecesMinimos: 2
+    pecesMaximos: 4
+    pecesTope: 8
+  - pezRequerido: 7
+    material: {fileID: 2100000, guid: c554eaf1918d6a74bb67ca26e9e4a497, type: 2}
+    pecesMinimos: 3
+    pecesMaximos: 5
+    pecesTope: 10
+  habilitarTeclasDebug: 1
+  alMejorar:
+    m_PersistentCalls:
+      m_Calls: []
+  alHaberMejoraDisponible:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &2026460382
 GameObject:
   m_ObjectHideFlags: 0
@@ -64470,6 +64680,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.Surfaces.ColliderSurface
   _collider: {fileID: 0}
+--- !u!65 &2039530134
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2039530130}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 16.270588, y: 3.442775, z: 8.910175}
+  m_Center: {x: -4.6534657, y: 9.561381, z: 5.479444}
 --- !u!1 &2043104773
 GameObject:
   m_ObjectHideFlags: 0
@@ -66849,7 +67080,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2126117682}
-  - component: {fileID: 2126117683}
   m_Layer: 0
   m_Name: dialogos
   m_TagString: Untagged
@@ -66875,33 +67105,6 @@ Transform:
   - {fileID: 180331300}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2126117683
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2126117681}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a83674b09e2541819c628e9305df22aa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DialogueController
-  listaDialogos:
-  - {fileID: 1790579142}
-  - {fileID: 1542134265}
-  - {fileID: 1023264578}
-  flechaAnterior: {fileID: 801218133}
-  flechaSiguiente: {fileID: 145596529}
-  ocultarAlCompletar: 1
-  ocultarFlechaAnteriorEnInicio: 1
-  alCambiarDialogo:
-    m_PersistentCalls:
-      m_Calls: []
-  alCompletarTodosLosDialogos:
-    m_PersistentCalls:
-      m_Calls: []
-  habilitarTeclasDebug: 1
 --- !u!1 &2134770852
 GameObject:
   m_ObjectHideFlags: 0

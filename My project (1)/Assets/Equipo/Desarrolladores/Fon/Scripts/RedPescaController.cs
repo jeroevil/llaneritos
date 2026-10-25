@@ -274,6 +274,14 @@ public class RedPescaController : MonoBehaviour
         CambiarEstado(Estado.ListaParaRecoger);
     }
 
+    /// <summary>Cambia cuántos peces atrapa la red por lanzamiento (lo usa MejoraRed).</summary>
+    public void ConfigurarCaptura(int minimo, int maximo, int tope)
+    {
+        pecesMinimos = Mathf.Max(0, minimo);
+        pecesMaximos = Mathf.Max(pecesMinimos, maximo);
+        pecesTope = Mathf.Max(pecesMaximos, tope);
+    }
+
     // =========================================================================
     // BUCLE
     // =========================================================================
