@@ -25,7 +25,7 @@ public class IntroMoricheTelon : MonoBehaviour
     [Range(0.8f, 3.5f)]
     public float distanciaFrente = 1.8f;
 
-    [Tooltip("Si esta activo, el logo flota siguiendo suavemente hacia donde gires la cabeza")]
+    [Tooltip("Si esta activo, el logo flota siguiendo suavemente hacia donde gires la cabeza. Si esta apagado, el logo queda fijo al centro de la vista (pegado a la camara) durante toda la intro.")]
     public bool seguirMiradaSuave = true;
 
     [Tooltip("Suavidad con la que el logo se reacomoda frente a los ojos")]
@@ -41,9 +41,27 @@ public class IntroMoricheTelon : MonoBehaviour
     [Range(0.3f, 3f)]
     public float duracionFade = 1.0f;
 
+    [Tooltip("Segundos que tarda el logo en aparecer (de transparente a opaco)")]
+    [Range(0.3f, 3f)]
+    public float duracionFadeIn = 1.0f;
+
+    [Header("Video Tutorial (antes del logo)")]
+    [Tooltip("Opcional: VideoPlayer del tutorial de controles. Si esta asignado, el video se reproduce completo dentro del telon y despues aparece el logo.")]
+    public UnityEngine.Video.VideoPlayer videoTutorial;
+
+    [Tooltip("Pantalla donde se ve el video (el objeto con el VideoPlayer). Queda fija frente a los ojos mientras suena.")]
+    public GameObject pantallaTutorial;
+
+    [Tooltip("Distancia en metros de la pantalla del video frente a los ojos")]
+    [Range(1f, 4f)]
+    public float distanciaPantalla = 2.5f;
+
     [Header("Control de Jugador")]
     [Tooltip("Desactiva temporalmente el script PinchToWalk durante la intro y lo reactiva al abrir el telon")]
     public bool bloquearCaminataEnIntro = true;
+
+    [Tooltip("Componentes de movimiento que se apagan durante la intro (joystick para caminar y girar del rig de Meta). Si se deja vacio, se busca el FirstPersonLocomotor de la escena.")]
+    public Behaviour[] locomocionABloquear;
 
     [Tooltip("Referencia opcional a la camara de los ojos (CenterEyeAnchor). Si se deja vacio, se busca sola.")]
     public Transform camaraOcular;
@@ -61,6 +79,9 @@ public class IntroMoricheTelon : MonoBehaviour
     private Renderer[] _renderers;
     private Vector3 _posicionObjetivoLogo;
     private Quaternion _rotacionObjetivoLogo;
+    private Transform _padreOriginalLogo;
+    private bool _logoPegadoACamara;
+    private Transform _padreOriginalPantalla;
 
     private void Awake()
     {
@@ -92,6 +113,15 @@ public class IntroMoricheTelon : MonoBehaviour
             _pinchToWalk = FindFirstObjectByType<PinchToWalk>();
         }
 
+        if (locomocionABloquear == null || locomocionABloquear.Length == 0)
+        {
+            // el rig de Meta mueve al jugador con el FirstPersonLocomotor (desplazamiento y giro con joystick)
+            var encontrados = new List<Behaviour>();
+            foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                if (mb != null && mb.GetType().Name == "FirstPersonLocomotor") encontrados.Add(mb);
+            locomocionABloquear = encontrados.ToArray();
+        }
+
         if (logoMoriche != null)
         {
             _sprites = logoMoriche.GetComponentsInChildren<SpriteRenderer>(true);
@@ -110,6 +140,8 @@ public class IntroMoricheTelon : MonoBehaviour
         // 2. Bloquear la caminata
         if (bloquearCaminataEnIntro && _pinchToWalk != null)
             _pinchToWalk.enabled = false;
+        if (bloquearCaminataEnIntro)
+            ActivarLocomocion(false);
 
         // 3. Colocar el logo justo frente a la mirada inicial
         if (logoMoriche != null)
@@ -117,7 +149,16 @@ public class IntroMoricheTelon : MonoBehaviour
             logoMoriche.SetActive(true);
             ActualizarAlfaLogo(1.0f);
 
-            if (camaraOcular != null)
+            if (camaraOcular != null && !seguirMiradaSuave)
+            {
+                // Logo fijo a la vista: se vuelve hijo de la camara para que no se mueva al girar la cabeza
+                _padreOriginalLogo = logoMoriche.transform.parent;
+                logoMoriche.transform.SetParent(camaraOcular, false);
+                logoMoriche.transform.localPosition = Vector3.forward * distanciaFrente;
+                logoMoriche.transform.localRotation = Quaternion.identity;
+                _logoPegadoACamara = true;
+            }
+            else if (camaraOcular != null)
             {
                 Vector3 fwd = camaraOcular.forward;
                 _posicionObjetivoLogo = camaraOcular.position + fwd * distanciaFrente;
@@ -131,7 +172,7 @@ public class IntroMoricheTelon : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (!_introEnProgreso || logoMoriche == null || camaraOcular == null) return;
+        if (!_introEnProgreso || _logoPegadoACamara || logoMoriche == null || camaraOcular == null) return;
 
         // Calcular la posicion ideal frente a los ojos
         Vector3 posicionDeseada = camaraOcular.position + camaraOcular.forward * distanciaFrente;
@@ -153,12 +194,31 @@ public class IntroMoricheTelon : MonoBehaviour
     {
         _introEnProgreso = true;
 
-        // 1. Tiempo que el logo permanece 100% visible
-        yield return new WaitForSeconds(tiempoVisible);
+        // 0. Video tutorial de controles (si hay): el logo espera escondido hasta que termine
+        if (videoTutorial != null)
+            yield return RutinaVideoTutorial();
 
-        // 2. Fade Out de transparencia del logo
-        float t = 0f;
         Vector3 escalaInicial = (logoMoriche != null) ? logoMoriche.transform.localScale : Vector3.one;
+
+        // 1. Fade In: el logo aparece de transparente a opaco, creciendo un poco (el fade out al reves)
+        float t = 0f;
+        while (t < duracionFadeIn)
+        {
+            t += Time.deltaTime;
+            float factor = Mathf.SmoothStep(0f, 1f, t / duracionFadeIn);
+            ActualizarAlfaLogo(factor);
+            if (logoMoriche != null)
+                logoMoriche.transform.localScale = escalaInicial * Mathf.Lerp(0.92f, 1.0f, factor);
+            yield return null;
+        }
+        ActualizarAlfaLogo(1f);
+        if (logoMoriche != null)
+            logoMoriche.transform.localScale = escalaInicial;
+
+        // 2. Tiempo que el logo permanece 100% visible
+        yield return new WaitForSeconds(tiempoVisible);
+        // 3. Fade Out de transparencia del logo
+        t = 0f;
 
         while (t < duracionFade)
         {
@@ -181,6 +241,12 @@ public class IntroMoricheTelon : MonoBehaviour
         {
             ActualizarAlfaLogo(0f);
             logoMoriche.SetActive(false);
+
+            if (_logoPegadoACamara)
+            {
+                logoMoriche.transform.SetParent(_padreOriginalLogo, true);
+                _logoPegadoACamara = false;
+            }
         }
 
         // 4. ¡Apertura del Telón! La caja negra desaparece de una
@@ -195,9 +261,85 @@ public class IntroMoricheTelon : MonoBehaviour
         {
             _pinchToWalk.enabled = true;
         }
+        if (bloquearCaminataEnIntro)
+            ActivarLocomocion(true);
 
         _introEnProgreso = false;
         OnTelonAbierto?.Invoke();
+    }
+
+    private void ActivarLocomocion(bool activa)
+    {
+        if (locomocionABloquear == null) return;
+        foreach (var componente in locomocionABloquear)
+            if (componente != null) componente.enabled = activa;
+    }
+
+    /// <summary>
+    /// Reproduce el video tutorial completo frente a los ojos y al terminar muestra el logo.
+    /// </summary>
+    private IEnumerator RutinaVideoTutorial()
+    {
+        if (logoMoriche != null)
+            logoMoriche.SetActive(false);
+
+        GameObject pantalla = pantallaTutorial != null ? pantallaTutorial : videoTutorial.gameObject;
+        pantalla.SetActive(true);
+        if (camaraOcular != null)
+        {
+            // pantalla fija a la vista, igual que el logo
+            _padreOriginalPantalla = pantalla.transform.parent;
+            pantalla.transform.SetParent(camaraOcular, false);
+            pantalla.transform.localPosition = Vector3.forward * distanciaPantalla;
+            pantalla.transform.localRotation = Quaternion.identity;
+        }
+
+        videoTutorial.isLooping = false;
+        videoTutorial.Prepare();
+        float espera = 0f;
+        while (!videoTutorial.isPrepared && espera < 15f)
+        {
+            espera += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        bool terminado = false;
+        UnityEngine.Video.VideoPlayer.EventHandler alTerminar = _ => terminado = true;
+        videoTutorial.loopPointReached += alTerminar;
+        videoTutorial.Play();
+
+        // si la carga fue lenta, Play puede perderse: se reintenta hasta que el video avance
+        float arranque = 0f;
+        while (videoTutorial.frame < 0 && arranque < 5f)
+        {
+            arranque += Time.unscaledDeltaTime;
+            if (!videoTutorial.isPlaying && videoTutorial.isPrepared) videoTutorial.Play();
+            yield return null;
+        }
+
+        // respaldo por si el evento no llega: la duracion del clip mas un margen
+        double duracion = videoTutorial.clip != null ? videoTutorial.clip.length : videoTutorial.length;
+        float limite = duracion > 0 ? (float)duracion + 2f : 60f;
+        float t = 0f;
+        while (!terminado && t < limite)
+        {
+            t += Time.unscaledDeltaTime;
+            yield return null;
+        }
+        videoTutorial.loopPointReached -= alTerminar;
+        videoTutorial.Stop();
+
+        if (camaraOcular != null)
+            pantalla.transform.SetParent(_padreOriginalPantalla, true);
+        pantalla.SetActive(false);
+        Debug.Log("[Intro] Video tutorial terminado. Ahora el logo.");
+
+        if (logoMoriche != null)
+        {
+            // se prende transparente: el fade in de RutinaIntro lo hace aparecer
+            logoMoriche.SetActive(true);
+            ActualizarAlfaLogo(0f);
+        }
     }
 
     /// <summary>
