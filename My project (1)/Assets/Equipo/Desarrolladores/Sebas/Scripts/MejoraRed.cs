@@ -49,7 +49,7 @@ public class MejoraRed : MonoBehaviour
     [SerializeField] List<NivelRed> niveles = new List<NivelRed>
     {
         new NivelRed { pezRequerido = 0, pecesMinimos = 1, pecesMaximos = 2, pecesTope = 6 },
-        new NivelRed { pezRequerido = 4, pecesMinimos = 2, pecesMaximos = 4, pecesTope = 8 },
+        new NivelRed { pezRequerido = 3, pecesMinimos = 2, pecesMaximos = 4, pecesTope = 8 },
         new NivelRed { pezRequerido = 7, pecesMinimos = 3, pecesMaximos = 5, pecesTope = 10 },
     };
 
@@ -191,6 +191,12 @@ public class MejoraRed : MonoBehaviour
         for (var p = t.parent; p != null; p = p.parent)
             if (!p.gameObject.activeSelf) return p.name;
         return "?";
+    }
+
+    /// <summary>Peces requeridos para un nivel (lo usa la barra para sincronizar sus hitos). -1 si no existe.</summary>
+    public int PezRequeridoNivel(int indice)
+    {
+        return indice >= 0 && indice < niveles.Count ? niveles[indice].pezRequerido : -1;
     }
 
     bool RedEnReposo()

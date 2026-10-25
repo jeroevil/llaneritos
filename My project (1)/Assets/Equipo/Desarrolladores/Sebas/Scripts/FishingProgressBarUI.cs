@@ -4,11 +4,13 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Controlador completo de la Barra de Progreso de Pesca para la escena de Sebas.
-/// Configurado con la estructura exacta de 4 rellenos progresivos y 2 rellenos de iconos:
-/// - Relleno Bueno 1: Peces 1 a 3 (Verde / Calma inicial)
-/// - Relleno Bueno 2: Peces 4 a 6 (Amarillo / Alerta / Inicio de acecho)
-/// - Relleno Bueno 3: Peces 7 a 9 (Naranja / Tensión alta previa al clímax)
+/// Configurado con la estructura exacta de 4 rellenos progresivos y 2 rellenos de iconos
+/// (los hitos salen de MejoraRed si está asignado; por defecto hito 1 = pez 3, hito 2 = pez 7):
+/// - Relleno Bueno 1: Antes del hito 1 (Verde / Calma inicial)
+/// - Relleno Bueno 2: Del hito 1 al hito 2 (Amarillo / Primera mejora de red)
+/// - Relleno Bueno 3: Del hito 2 al pez 9 (Naranja / Tensión alta previa al clímax)
 /// - Relleno Final Malvado: Pez 10 (Rojo sangre / Clímax persecución)
+/// - El llenado va por tramos: el pez de cada hito cae justo sobre su raya divisoria.
 /// - Relleno Iconos Bueno: Peces 1 a 9
 /// - Relleno Iconos Malo: Pez 10 (Se corrompen los círculos de hitos)
 /// - Iconos superiores, contornos y divisiones.
@@ -21,6 +23,22 @@ public class FishingProgressBarUI : MonoBehaviour
     [Header("Referencias del Director")]
     [Tooltip("El director de pesca y Silbón en la escena. Si está vacío, se busca automáticamente.")]
     public FishingSilbonDirector director;
+
+    [Header("Hitos (sincronizados con la mejora de la red)")]
+    [Tooltip("Si está asignado, los hitos se toman de los niveles 1 y 2 de MejoraRed y se ignoran los dos campos de abajo.")]
+    public MejoraRed mejoraRed;
+
+    [Tooltip("Pez del hito 1 (cambio a Relleno Bueno 2) si no hay MejoraRed asignado.")]
+    [Min(1)] public int pezHito1 = 3;
+
+    [Tooltip("Pez del hito 2 (cambio a Relleno Bueno 3) si no hay MejoraRed asignado.")]
+    [Min(1)] public int pezHito2 = 7;
+
+    [Tooltip("Posición de la raya divisoria 1 dentro del sprite (0 = borde izquierdo, 1 = derecho). Medida en 'Divisiones barra.png'.")]
+    [Range(0f, 1f)] public float posicionDivision1 = 0.317f;
+
+    [Tooltip("Posición de la raya divisoria 2 dentro del sprite. Medida en 'Divisiones barra.png'.")]
+    [Range(0f, 1f)] public float posicionDivision2 = 0.682f;
 
     [Header("Estructura de la Barra")]
     [Tooltip("El RectTransform padre de todos los elementos visuales de la barra.")]
@@ -36,13 +54,13 @@ public class FishingProgressBarUI : MonoBehaviour
     public Image divisiones;
 
     [Header("Los 4 Rellenos de la Barra (Llenado Horizontal Izq -> Der)")]
-    [Tooltip("Relleno activo en los primeros 3 peces (1 a 3). Color verde / calma.")]
+    [Tooltip("Relleno activo antes del hito 1 (por defecto peces 0 a 2). Color verde / calma.")]
     public Image rellenoBueno1;
 
-    [Tooltip("Relleno activo en los peces 4 a 6. Color amarillo / acecho.")]
+    [Tooltip("Relleno activo del hito 1 al hito 2 (por defecto peces 3 a 6). Color amarillo / primera mejora.")]
     public Image rellenoBueno2;
 
-    [Tooltip("Relleno activo en los peces 7 a 9. Color naranja / tensión alta.")]
+    [Tooltip("Relleno activo del hito 2 al pez 9 (por defecto peces 7 a 9). Color naranja / tensión alta.")]
     public Image rellenoBueno3;
 
     [Tooltip("Relleno activo en el décimo pez (10). Color rojo sangre siniestro.")]
@@ -168,8 +186,7 @@ public class FishingProgressBarUI : MonoBehaviour
         if (director != null)
         {
             _ultimoPeces = director.currentFishCount;
-            float targetFill = director.totalFishNeeded > 0 ? (float)director.currentFishCount / director.totalFishNeeded : 0f;
-            _fillActual = targetFill;
+            _fillActual = FillParaPeces(director.currentFishCount);
             ActualizarFillEnRellenos(_fillActual);
         }
     }
@@ -190,8 +207,7 @@ public class FishingProgressBarUI : MonoBehaviour
         if (director == null) return;
 
         int pecesActuales = director.currentFishCount;
-        int totalNecesario = Mathf.Max(1, director.totalFishNeeded);
-        float fillObjetivo = Mathf.Clamp01((float)pecesActuales / totalNecesario);
+        float fillObjetivo = FillParaPeces(pecesActuales);
 
         // Si entró un nuevo pez, disparar pop/rebote
         if (_ultimoPeces >= 0 && pecesActuales > _ultimoPeces)
@@ -203,6 +219,41 @@ public class FishingProgressBarUI : MonoBehaviour
         // Deslizamiento suave
         _fillActual = Mathf.SmoothDamp(_fillActual, fillObjetivo, ref _fillVelocidad, duracionSuavizado);
         ActualizarFillEnRellenos(_fillActual);
+    }
+
+    public int Hito1
+    {
+        get
+        {
+            int h = mejoraRed != null ? mejoraRed.PezRequeridoNivel(1) : -1;
+            return h > 0 ? h : pezHito1;
+        }
+    }
+
+    public int Hito2
+    {
+        get
+        {
+            int h = mejoraRed != null ? mejoraRed.PezRequeridoNivel(2) : -1;
+            return h > 0 ? h : pezHito2;
+        }
+    }
+
+    /// <summary>
+    /// fillAmount por tramos: 0 peces = 0, hito 1 = raya 1, hito 2 = raya 2, total = 1.
+    /// Así el pez de cada hito queda justo sobre la raya dibujada en el sprite.
+    /// </summary>
+    public float FillParaPeces(float peces)
+    {
+        int total = director != null ? Mathf.Max(1, director.totalFishNeeded) : 10;
+        int h1 = Mathf.Clamp(Hito1, 1, total - 1);
+        int h2 = Mathf.Clamp(Hito2, h1 + 1, total);
+
+        if (peces <= 0f) return 0f;
+        if (peces < h1) return Mathf.Lerp(0f, posicionDivision1, peces / h1);
+        if (peces < h2) return Mathf.Lerp(posicionDivision1, posicionDivision2, (peces - h1) / (h2 - h1));
+        if (h2 >= total) return 1f;
+        return Mathf.Lerp(posicionDivision2, 1f, Mathf.Clamp01((peces - h2) / (total - h2)));
     }
 
     private void ActualizarFillEnRellenos(float fill)
@@ -221,6 +272,9 @@ public class FishingProgressBarUI : MonoBehaviour
         if (director == null) return;
 
         int peces = director.currentFishCount;
+        int total = Mathf.Max(1, director.totalFishNeeded);
+        int hito1 = Hito1;
+        int hito2 = Hito2;
 
         // Alphas objetivo según el rango de peces
         float targetB1 = 0f;
@@ -231,23 +285,23 @@ public class FishingProgressBarUI : MonoBehaviour
         float targetIconoBueno = 1f;
         float targetIconoMalo = 0f;
 
-        if (peces <= 3)
+        if (peces < hito1)
         {
-            // Fase 1: Calma (Peces 0 a 3)
+            // Fase 1: Calma (antes del hito 1)
             targetB1 = 1f;
             targetIconoBueno = 1f;
             targetIconoMalo = 0f;
         }
-        else if (peces >= 4 && peces <= 6)
+        else if (peces < hito2)
         {
-            // Fase 2: Acecho (Peces 4 a 6)
+            // Fase 2: Primera mejora de red (del hito 1 al hito 2)
             targetB2 = 1f;
             targetIconoBueno = 1f;
             targetIconoMalo = 0f;
         }
-        else if (peces >= 7 && peces <= 9)
+        else if (peces < total)
         {
-            // Fase 3: Tensión previa al clímax (Peces 7 a 9)
+            // Fase 3: Tensión previa al clímax (del hito 2 al pez 9)
             targetB3 = 1f;
             targetIconoBueno = 1f;
             targetIconoMalo = 0f;
@@ -284,6 +338,24 @@ public class FishingProgressBarUI : MonoBehaviour
 
         if (divisiones != null)
             divisiones.color = Color.Lerp(Color.white, colorTinteTerror, _alphaMal);
+    }
+
+    /// <summary>
+    /// Escribe en la consola dónde cae cada pez en la barra y si los hitos coinciden con las rayas.
+    /// </summary>
+    [ContextMenu("Diagnosticar hitos")]
+    public void DiagnosticarHitos()
+    {
+        int total = director != null ? Mathf.Max(1, director.totalFishNeeded) : 10;
+        var sb = new System.Text.StringBuilder("[Barra] DIAGNOSTICO DE HITOS\n");
+        sb.AppendLine($"  Hito 1: pez {Hito1} | Hito 2: pez {Hito2} | Total: {total} (fuente: {(mejoraRed != null ? "MejoraRed" : "campos de la barra")})");
+        if (mejoraRed == null) sb.AppendLine("  AVISO  MejoraRed no asignado: los hitos de la barra y de la red pueden desfasarse.");
+        for (int p = 0; p <= total; p++)
+        {
+            string marca = p == Hito1 ? "  <- raya 1" : p == Hito2 ? "  <- raya 2" : "";
+            sb.AppendLine($"  Pez {p,2}: llenado {FillParaPeces(p):P1}{marca}");
+        }
+        Debug.Log(sb.ToString(), this);
     }
 
     /// <summary>

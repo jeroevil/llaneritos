@@ -17,7 +17,7 @@ public class AparicionPorPeces : MonoBehaviour
     [SerializeField] FishingSilbonDirector director;
 
     [Tooltip("Cantidad de peces en el barril con la que aparecen los objetos.")]
-    [SerializeField, Min(1)] int pezRequerido = 4;
+    [SerializeField, Min(1)] int pezRequerido = 3;
 
     [Header("Objetos")]
     [Tooltip("Objetos que se activan al llegar al pez requerido.")]

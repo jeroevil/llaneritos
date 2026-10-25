@@ -18336,6 +18336,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FishingProgressBarUI
   director: {fileID: 943990104}
+  mejoraRed: {fileID: 2021478250}
+  pezHito1: 3
+  pezHito2: 7
+  posicionDivision1: 0.317
+  posicionDivision2: 0.682
   rootBarra: {fileID: 687574156}
   fondoBase: {fileID: 1357977434}
   contornoBarra: {fileID: 1357977434}
@@ -26018,7 +26023,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AparicionPorPeces
   director: {fileID: 943990104}
-  pezRequerido: 4
+  pezRequerido: 3
   objetosAMostrar:
   - {fileID: 1449568805}
   - {fileID: 1397952872}
@@ -63897,7 +63902,7 @@ MonoBehaviour:
     pecesMinimos: 1
     pecesMaximos: 2
     pecesTope: 6
-  - pezRequerido: 4
+  - pezRequerido: 3
     material: {fileID: 2100000, guid: 9d07e4299b78c1545a575340d13a9335, type: 2}
     pecesMinimos: 2
     pecesMaximos: 4
