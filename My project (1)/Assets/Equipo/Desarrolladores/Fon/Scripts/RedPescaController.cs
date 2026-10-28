@@ -7,9 +7,10 @@ using Oculus.Interaction;
 
 /// <summary>
 /// Red de pesca (atarraya).
-/// - Si la sueltas, se cae donde esté (con la velocidad de tu mano).
-/// - Si la lanzas con fuerza, se abre en el aire.
-/// - Si cae al agua: queda extendida, se cierra atrapando peces y vuelve sola a la orilla.
+/// - Si la sueltas dentro de la zona de lanzamiento, se lanza sola siempre por el mismo recorrido.
+/// - Si la sueltas llena cerca de la mesa (zona de la mesa), se despliega sobre ella con los peces.
+/// - Fuera de las zonas: si la sueltas se cae donde esté; si la lanzas con fuerza, se abre en el aire.
+/// - Si cae al agua: queda extendida, se cierra atrapando peces y la jalan a tirones hasta la orilla.
 /// - Si cae llena sobre la mesa: se despliega y los peces quedan encima como objetos físicos.
 ///
 /// La forma de la red viene de los blendshapes de "animacion red tirar (1).fbx"
@@ -49,6 +50,20 @@ public class RedPescaController : MonoBehaviour
     [Tooltip("Si después de esto sigue cayendo (se salió del mapa), vuelve a la orilla.")]
     [SerializeField] float tiempoMaximoVuelo = 6f;
 
+    [Header("Lanzamiento guiado")]
+    [Tooltip("Trigger (Box/Sphere/Capsule) de la zona de lanzamiento. Si sueltas la red dentro, se lanza sola por el recorrido fijo, sin importar el gesto.")]
+    [SerializeField] Collider zonaLanzamiento;
+    [Tooltip("Donde cae la red en el agua con el lanzamiento guiado (solo se usa su X/Z: la altura es la del agua).")]
+    [SerializeField] Transform destinoLanzamiento;
+    [Tooltip("Opcional: punto fijo desde donde sale el recorrido. Vacío = sale de donde se soltó la red.")]
+    [SerializeField] Transform salidaLanzamiento;
+    [Tooltip("Segundos que tarda la red en llegar al agua.")]
+    [SerializeField] float duracionLanzamiento = 1.3f;
+    [Tooltip("Altura del arco por encima de la línea recta entre la salida y el destino.")]
+    [SerializeField] float alturaArcoLanzamiento = 1.5f;
+    [Tooltip("Segundos en que la red pasa de la mano al recorrido fijo.")]
+    [SerializeField] float tiempoAcomodo = 0.3f;
+
     [Header("Forma de la red")]
     [Tooltip("Segundo del clip en que la red queda totalmente abierta.")]
     [SerializeField] float tiempoClipAbierta = 2f;
@@ -61,10 +76,24 @@ public class RedPescaController : MonoBehaviour
     [Tooltip("Segundos que tarda en cerrarse si cae abierta en tierra.")]
     [SerializeField] float tiempoAsentar = 0.5f;
 
-    [Header("Regreso desde el agua")]
-    [SerializeField] float velocidadRegreso = 1.5f;
-    [SerializeField] float tiempoSubida = 1.8f;
+    [Header("Regreso desde el agua (a tirones)")]
+    [Tooltip("Metros que avanza la red en cada jalón de la cuerda.")]
+    [SerializeField] float distanciaJalon = 0.9f;
+    [Tooltip("Segundos de cada jalón: arranca fuerte y frena.")]
+    [SerializeField] float duracionJalon = 0.55f;
+    [Tooltip("Pausa entre jalones, como cuando se recoge la cuerda mano a mano.")]
+    [SerializeField] float pausaEntreJalones = 0.2f;
+    [Tooltip("Cuánto se levanta la red del agua en cada jalón.")]
+    [SerializeField] float elevacionJalon = 0.12f;
+    [Tooltip("Segundos del tirón final que la saca del agua hasta la orilla.")]
+    [SerializeField] float tiempoSubida = 1.4f;
     [SerializeField] float alturaArcoSubida = 0.8f;
+    [Tooltip("Cuánto se hunde la red justo antes del tirón final (toma impulso).")]
+    [SerializeField] float anticipacionSubida = 0.15f;
+    [Tooltip("Cuánto se pasa de la orilla y regresa al llegar (0 = sin rebote).")]
+    [SerializeField] float reboteLlegada = 1.3f;
+    [Tooltip("Grados máximos que se inclina la red hacia donde la jalan.")]
+    [SerializeField] float inclinacionMaxima = 25f;
 
     [Header("Peces")]
     [Tooltip("Prefab del pez físico que aparece en la mesa.")]
@@ -78,6 +107,8 @@ public class RedPescaController : MonoBehaviour
 
     [Header("Mesa")]
     [SerializeField] Collider mesa;
+    [Tooltip("Trigger (Box/Sphere/Capsule) alrededor de la mesa. Si sueltas la red llena dentro, se despliega sola sobre la mesa.")]
+    [SerializeField] Collider zonaMesa;
     [Tooltip("Tamaño de la red desplegada en la mesa (1 = 2,5 m de diámetro).")]
     [SerializeField] float escalaEnMesa = 0.42f;
     [SerializeField] float tiempoDespliegue = 0.6f;
@@ -120,6 +151,15 @@ public class RedPescaController : MonoBehaviour
     float aperturaInicial;
     float escalaInicial;
     float alturaInicioCierre;
+
+    // Lanzamiento guiado
+    bool vueloGuiado;
+    Vector3 salidaGuiada;
+    Vector3 desfaseGuiado;
+
+    // Inclinación de la red mientras la jalan
+    Vector3 ultimaBase;
+    Vector3 velocidadSuave;
 
     readonly List<GameObject> pecesEnRed = new List<GameObject>();
     readonly List<GameObject> pecesEnMesa = new List<GameObject>();
@@ -210,18 +250,58 @@ public class RedPescaController : MonoBehaviour
     // =========================================================================
     void AlEventoAgarre(PointerEvent evento)
     {
-        if (evento.Type == PointerEventType.Select && (EstadoActual == Estado.ListaParaRecoger || EstadoActual == Estado.EnMesa))
+        if (evento.Type == PointerEventType.Select) Agarrar();
+        else if (evento.Type == PointerEventType.Unselect || evento.Type == PointerEventType.Cancel) Soltar();
+    }
+
+    /// <summary>La mano agarra la red (lo llama el Grabbable; también sirve para pruebas).</summary>
+    public void Agarrar()
+    {
+        if (EstadoActual != Estado.ListaParaRecoger && EstadoActual != Estado.EnMesa) return;
+        historialMano.Clear();
+        aperturaInicial = apertura;
+        escalaInicial = escalaVisual;
+        CambiarEstado(Estado.EnMano);
+    }
+
+    /// <summary>La mano suelta la red: decide entre mesa, lanzamiento guiado o lanzamiento libre.</summary>
+    public void Soltar()
+    {
+        if (EstadoActual != Estado.EnMano) return;
+
+        // Llena y cerca de la mesa: se pone sola sobre la mesa
+        if (mesa != null && PecesAtrapados > 0 && DentroDeZona(zonaMesa))
         {
-            historialMano.Clear();
-            aperturaInicial = apertura;
-            escalaInicial = escalaVisual;
-            CambiarEstado(Estado.EnMano);
+            EmpezarDespliegue(CentroRed());
+            return;
         }
-        else if ((evento.Type == PointerEventType.Unselect || evento.Type == PointerEventType.Cancel) && EstadoActual == Estado.EnMano)
+
+        // En la zona de lanzamiento: se lanza sola por el recorrido fijo
+        if (destinoLanzamiento != null && DentroDeZona(zonaLanzamiento))
         {
-            Vector3 v = VelocidadMano();
-            Lanzar(v.magnitude >= velocidadMinima ? v * multiplicadorLanzamiento : v);
+            LanzarGuiado();
+            return;
         }
+
+        Vector3 v = VelocidadMano();
+        Lanzar(v.magnitude >= velocidadMinima ? v * multiplicadorLanzamiento : v);
+    }
+
+    /// <summary>Centro de la red en el mundo (lo que se compara con las zonas).</summary>
+    Vector3 CentroRed()
+    {
+        return colliderAgarre != null ? colliderAgarre.bounds.center : transform.position;
+    }
+
+    bool DentroDeZona(Collider zona)
+    {
+        if (zona == null || !zona.enabled || !zona.gameObject.activeInHierarchy) return false;
+        Vector3 p = CentroRed();
+
+        // ClosestPoint no sirve con MeshCollider cóncavo: ahí basta la caja que lo envuelve
+        var malla = zona as MeshCollider;
+        if (malla != null && !malla.convex) return zona.bounds.Contains(p);
+        return (zona.ClosestPoint(p) - p).sqrMagnitude < 0.0001f;
     }
 
     Vector3 VelocidadMano()
@@ -244,13 +324,31 @@ public class RedPescaController : MonoBehaviour
         posicionBase = PuntoBase();
         velocidad = velocidadInicial;
         esLanzamiento = velocidadInicial.magnitude >= velocidadMinima;
+        vueloGuiado = false;
+        CambiarEstado(Estado.Volando);
+    }
+
+    /// <summary>Lanza la red por el recorrido fijo hasta destinoLanzamiento, sin importar cómo se soltó.</summary>
+    public void LanzarGuiado()
+    {
+        if (destinoLanzamiento == null) { Lanzar(VelocidadPrueba()); return; }
+
+        AplicarApertura(apertura, 1f);
+        posicionBase = PuntoBase();
+        salidaGuiada = salidaLanzamiento != null ? salidaLanzamiento.position : posicionBase;
+        // La red arranca donde se soltó y en tiempoAcomodo queda encima del recorrido fijo
+        desfaseGuiado = posicionBase - salidaGuiada;
+        esLanzamiento = true;
+        vueloGuiado = true;
+        ultimoEvento = "Lanzamiento guiado";
         CambiarEstado(Estado.Volando);
     }
 
     public void LanzarPrueba()
     {
         Reiniciar();
-        Lanzar(VelocidadPrueba());
+        if (destinoLanzamiento != null) LanzarGuiado();
+        else Lanzar(VelocidadPrueba());
     }
 
     /// <summary>Prueba: llena la red y la suelta sobre la mesa.</summary>
@@ -308,7 +406,7 @@ public class RedPescaController : MonoBehaviour
             case Estado.Extendida: ActualizarExtendida(); break;
             case Estado.Cerrandose: ActualizarCierre(); break;
             case Estado.Regresando: ActualizarRegreso(dt); break;
-            case Estado.Subiendo: ActualizarSubida(); break;
+            case Estado.Subiendo: ActualizarSubida(dt); break;
             case Estado.Desplegando: ActualizarDespliegue(); break;
         }
     }
@@ -333,6 +431,8 @@ public class RedPescaController : MonoBehaviour
     void ActualizarVuelo(float dt)
     {
         if (esLanzamiento) AplicarApertura(Mathf.Max(apertura, tiempoEstado / tiempoApertura));
+
+        if (vueloGuiado) { ActualizarVueloGuiado(); return; }
 
         velocidad.y -= gravedad * dt;
         Vector3 siguiente = posicionBase + velocidad * dt;
@@ -359,13 +459,7 @@ public class RedPescaController : MonoBehaviour
 
         if (siguiente.y <= alturaAgua)
         {
-            siguiente.y = alturaAgua;
-            posicionBase = siguiente;
-            AplicarApertura(1f);
-            ColocarBaseEn(posicionBase);
-            ultimoEvento = "Cayó al agua";
-            CambiarEstado(Estado.Extendida);
-            alCaerAlAgua.Invoke();
+            CaerAlAgua(siguiente);
             return;
         }
 
@@ -373,6 +467,44 @@ public class RedPescaController : MonoBehaviour
         ColocarBaseEn(posicionBase);
 
         if (tiempoEstado > tiempoMaximoVuelo) EmpezarSubida();
+    }
+
+    /// <summary>Recorrido fijo: no choca con nada, siempre termina en el mismo punto del agua.</summary>
+    void ActualizarVueloGuiado()
+    {
+        float t = duracionLanzamiento > 0f ? Mathf.Clamp01(tiempoEstado / duracionLanzamiento) : 1f;
+        float acomodo = tiempoAcomodo > 0f ? Mathf.Clamp01(tiempoEstado / tiempoAcomodo) : 1f;
+
+        Vector3 p = PuntoRecorridoGuiado(salidaGuiada, t) + desfaseGuiado * (1f - Mathf.SmoothStep(0f, 1f, acomodo));
+
+        if (t >= 1f)
+        {
+            CaerAlAgua(p);
+            return;
+        }
+
+        posicionBase = p;
+        ColocarBaseEn(posicionBase);
+    }
+
+    /// <summary>Parábola entre la salida y el destino (avance horizontal constante, como con gravedad).</summary>
+    Vector3 PuntoRecorridoGuiado(Vector3 salida, float t)
+    {
+        Vector3 destino = destinoLanzamiento.position;
+        destino.y = alturaAgua;
+        return Vector3.Lerp(salida, destino, t) + Vector3.up * (4f * alturaArcoLanzamiento * t * (1f - t));
+    }
+
+    void CaerAlAgua(Vector3 punto)
+    {
+        punto.y = alturaAgua;
+        posicionBase = punto;
+        vueloGuiado = false;
+        AplicarApertura(1f);
+        ColocarBaseEn(posicionBase);
+        ultimoEvento = "Cayó al agua";
+        CambiarEstado(Estado.Extendida);
+        alCaerAlAgua.Invoke();
     }
 
     void ActualizarAsentando()
@@ -408,57 +540,115 @@ public class RedPescaController : MonoBehaviour
             ultimoEvento = "Atrapó " + nuevos + " pez(es)";
             alAtraparPeces.Invoke(nuevos);
 
-            if (puntoOrillaAgua != null) CambiarEstado(Estado.Regresando);
+            if (puntoOrillaAgua != null) EmpezarRegreso();
             else EmpezarSubida();
         }
     }
 
+    void EmpezarRegreso()
+    {
+        inicioMovimiento = posicionBase;
+        ultimaBase = posicionBase;
+        velocidadSuave = Vector3.zero;
+        CambiarEstado(Estado.Regresando);
+    }
+
+    /// <summary>La jalan hacia la orilla a tirones: arranque fuerte, frenado y una pausa entre jalones.</summary>
     void ActualizarRegreso(float dt)
     {
         Vector3 destino = puntoOrillaAgua.position;
-        Vector3 horizontal = new Vector3(destino.x - posicionBase.x, 0f, destino.z - posicionBase.z);
-        float paso = velocidadRegreso * dt;
+        Vector3 total = new Vector3(destino.x - inicioMovimiento.x, 0f, destino.z - inicioMovimiento.z);
+        float distancia = total.magnitude;
 
-        if (horizontal.magnitude <= paso)
-        {
-            posicionBase.x = destino.x;
-            posicionBase.z = destino.z;
-            ColocarBaseEn(posicionBase);
-            EmpezarSubida();
-            return;
-        }
+        float ciclo = Mathf.Max(0.01f, duracionJalon + pausaEntreJalones);
+        int jalon = Mathf.FloorToInt(tiempoEstado / ciclo);
+        float enCiclo = tiempoEstado - jalon * ciclo;
+        float u = duracionJalon > 0f ? Mathf.Clamp01(enCiclo / duracionJalon) : 1f;
+        // Acelera rápido (pico al 25 % del jalón) y frena largo; sin saltos de velocidad entre cuadros
+        float s = u * u * (3f - 2f * u);
+        float avanceJalon = 1f - (1f - s) * (1f - s) * (1f - s);
+        float recorrido = Mathf.Min((jalon + avanceJalon) * distanciaJalon, distancia);
 
-        posicionBase += horizontal.normalized * paso;
-        posicionBase.y = alturaAgua - hundimiento + Mathf.Sin(tiempoEstado * 3f) * 0.03f;
+        Vector3 p = inicioMovimiento + (distancia > 0.0001f ? total / distancia * recorrido : Vector3.zero);
+        // Cada jalón la saca un poco del agua (sube rápido al principio) y en la pausa se vuelve a hundir
+        float fase = enCiclo / ciclo;
+        p.y = alturaAgua - hundimiento + elevacionJalon * Mathf.Sin(Mathf.PI * Mathf.Pow(fase, 0.6f));
+
+        Inclinar(p, dt);
+        posicionBase = p;
         ColocarBaseEn(posicionBase);
+
+        // Llega a la orilla en pleno jalón: el tirón final sigue con ese impulso
+        if (recorrido >= distancia) EmpezarSubida();
     }
 
     void EmpezarSubida()
     {
         inicioMovimiento = PuntoBase();
+        ultimaBase = inicioMovimiento;
+        if (EstadoActual != Estado.Regresando) velocidadSuave = Vector3.zero;
         aperturaInicial = apertura;
         CambiarEstado(Estado.Subiendo);
     }
 
-    void ActualizarSubida()
+    /// <summary>Toma impulso hundiéndose, un tirón la saca del agua y llega a la orilla con un pequeño rebote.</summary>
+    void ActualizarSubida(float dt)
     {
         if (puntoRecoger == null) { CambiarEstado(Estado.ListaParaRecoger); return; }
 
-        float t = Mathf.Clamp01(tiempoEstado / tiempoSubida);
-        float suave = Mathf.SmoothStep(0f, 1f, t);
-        AplicarApertura(Mathf.Lerp(aperturaInicial, 0f, suave));
+        const float finAnticipacion = 0.18f;
+        float t = tiempoSubida > 0f ? Mathf.Clamp01(tiempoEstado / tiempoSubida) : 1f;
+        Vector3 desde = inicioMovimiento + Vector3.down * anticipacionSubida;
+        Vector3 p;
 
-        Vector3 p = Vector3.Lerp(inicioMovimiento, puntoRecoger.position, suave);
-        p.y += Mathf.Sin(t * Mathf.PI) * alturaArcoSubida;
+        if (t < finAnticipacion)
+        {
+            // La cuerda se tensa: la red se hunde un poco y empieza a cerrarse
+            float a = t / finAnticipacion;
+            p = Vector3.Lerp(inicioMovimiento, desde, Mathf.Sin(a * Mathf.PI * 0.5f));
+            AplicarApertura(Mathf.Lerp(aperturaInicial, aperturaInicial * 0.5f, a));
+        }
+        else
+        {
+            float u = (t - finAnticipacion) / (1f - finAnticipacion);
+            // u² hace que el tirón arranque desde quieta (sin salto) y acelere fuerte enseguida
+            p = Vector3.LerpUnclamped(desde, puntoRecoger.position, EaseOutBack(u * u, reboteLlegada));
+            p.y += 4f * alturaArcoSubida * u * (1f - u);
+            AplicarApertura(Mathf.Lerp(aperturaInicial * 0.5f, 0f, Mathf.Clamp01(u * 3f)));
+        }
+
+        Inclinar(p, dt);
         ColocarBaseEn(p);
 
         if (t >= 1f)
         {
             AplicarApertura(0f);
+            transform.rotation = RotacionDerecha();
             ColocarBaseEn(puntoRecoger.position);
             CambiarEstado(Estado.ListaParaRecoger);
             alQuedarListaParaRecoger.Invoke();
         }
+    }
+
+    static float EaseOutBack(float x, float rebote)
+    {
+        float c3 = rebote + 1f;
+        float m = x - 1f;
+        return 1f + c3 * m * m * m + rebote * m * m;
+    }
+
+    /// <summary>Inclina la red hacia donde la jalan, con algo de retraso, como un bulto colgando de la cuerda.</summary>
+    void Inclinar(Vector3 nuevaBase, float dt)
+    {
+        Vector3 v = dt > 0f ? (nuevaBase - ultimaBase) / dt : Vector3.zero;
+        ultimaBase = nuevaBase;
+        v.y = 0f;
+        velocidadSuave = Vector3.Lerp(velocidadSuave, v, 1f - Mathf.Exp(-8f * dt));
+
+        float angulo = Mathf.Min(velocidadSuave.magnitude * 12f, inclinacionMaxima);
+        Vector3 eje = Vector3.Cross(Vector3.up, velocidadSuave);
+        Quaternion derecha = RotacionDerecha();
+        transform.rotation = eje.sqrMagnitude > 0.000001f ? Quaternion.AngleAxis(angulo, eje.normalized) * derecha : derecha;
     }
 
     // =========================================================================
@@ -730,6 +920,27 @@ public class RedPescaController : MonoBehaviour
             Gizmos.DrawWireSphere(puntoOrillaAgua.position, 0.3f);
         }
 
+        DibujarZona(zonaLanzamiento, new Color(1f, 0.6f, 0f));
+        DibujarZona(zonaMesa, new Color(0.6f, 0.3f, 1f));
+
+        // Recorrido fijo del lanzamiento guiado
+        if (destinoLanzamiento != null)
+        {
+            Vector3 salida = salidaLanzamiento != null ? salidaLanzamiento.position
+                : zonaLanzamiento != null ? zonaLanzamiento.bounds.center
+                : puntoRecoger != null ? puntoRecoger.position : transform.position;
+            Gizmos.color = Color.yellow;
+            Vector3 anterior = salida;
+            for (int i = 1; i <= 40; i++)
+            {
+                Vector3 siguiente = PuntoRecorridoGuiado(salida, i / 40f);
+                Gizmos.DrawLine(anterior, siguiente);
+                anterior = siguiente;
+            }
+            Gizmos.DrawWireSphere(anterior, 0.4f);
+            return;
+        }
+
         if (puntoRecoger == null) return;
 
         // Trayectoria del lanzamiento de prueba
@@ -743,5 +954,12 @@ public class RedPescaController : MonoBehaviour
             Gizmos.DrawLine(p, siguiente);
             p = siguiente;
         }
+    }
+
+    static void DibujarZona(Collider zona, Color color)
+    {
+        if (zona == null) return;
+        Gizmos.color = color;
+        Gizmos.DrawWireCube(zona.bounds.center, zona.bounds.size);
     }
 }
