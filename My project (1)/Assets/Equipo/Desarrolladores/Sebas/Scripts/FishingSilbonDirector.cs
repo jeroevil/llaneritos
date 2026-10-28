@@ -793,7 +793,9 @@ public class FishingSilbonDirector : MonoBehaviour
 
             yield return new WaitForSeconds(tiempoEnOscuridadSegundoParpadeo);
             yield return StartCoroutine(RutinaFundidoBlink(duracionAperturaOjos, 1.0f, 0.0f));
-            Debug.Log($"[Silbon] Segundo parpadeo: aparece a {Vector3.Distance(jugadorOcular.position, posicionPersecucion):F1}m del jugador.");
+            Vector3 separacionAparicion = posicionPersecucion - jugadorOcular.position;
+            separacionAparicion.y = 0f;
+            Debug.Log($"[Silbon] Segundo parpadeo: aparece a {separacionAparicion.magnitude:F1}m del jugador.");
         }
 
         if (audioManager != null)
@@ -842,7 +844,11 @@ public class FishingSilbonDirector : MonoBehaviour
                     navMeshAgentSilbon.isStopped = false;
                     navMeshAgentSilbon.SetDestination(jugadorOcular.position);
 
-                    float dist = Vector3.Distance(silbonEnemigo.transform.position, jugadorOcular.position);
+                    // Distancia solo en horizontal: los pies del Silbon contra la cabeza del jugador
+                    // sumaban la altura de la cabeza (~1.6m) y nunca bajaban de la distancia de captura
+                    Vector3 separacion = silbonEnemigo.transform.position - jugadorOcular.position;
+                    separacion.y = 0f;
+                    float dist = separacion.magnitude;
                     if (dist <= distanciaCapturaJugador)
                     {
                         Debug.Log("[Silbon] ¡El Silbón te ha atrapado! (Jumpscare)");
