@@ -125,6 +125,43 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("Distancia en metros para considerar que el Silbon atrapo al jugador.")]
     public float distanciaCapturaJugador = 1.3f;
 
+    [Header("Emergencia desde el Agua (Pez 10)")]
+    [Tooltip("Punto en la superficie del agua donde emerge el Silbon. Si esta vacio, emerge en 'Punto Inicio Persecucion' sin subir (comportamiento anterior).")]
+    public Transform puntoEmergencia;
+
+    [Tooltip("Metros por debajo del punto de emergencia desde donde empieza a subir.")]
+    [Min(0f)] public float profundidadEmergencia = 2.5f;
+
+    [Tooltip("Multiplicador de tamaño del Silbon mientras emerge (1 = tamaño normal). Vuelve a su tamaño en el negro del segundo parpadeo.")]
+    [Range(1f, 3f)] public float escalaEmergencia = 1.4f;
+
+    [Tooltip("Forma de la subida durante la animacion (0 = abajo, 1 = en el punto). Por defecto sale rapido y frena al final.")]
+    public AnimationCurve curvaEmergencia = new AnimationCurve(new Keyframe(0f, 0f, 0f, 2f), new Keyframe(1f, 1f, 0f, 0f));
+
+    [Header("Enfoque del Jugador (solo con la pantalla en negro)")]
+    [Tooltip("Raiz del jugador (OVRCameraRig / objeto con PinchToWalk). Se gira solo en Y y solo a oscuras, como un snap turn.")]
+    public Transform rigJugador;
+
+    [Tooltip("En el primer negro, girar al jugador para que al abrir los ojos quede mirando al punto de emergencia.")]
+    public bool orientarJugadorAlEmerger = true;
+
+    [Header("Segundo Parpadeo: Aparicion Cercana")]
+    [Tooltip("Tras emerger, parpadeo a negro y el Silbon aparece frente a donde mira el jugador. Desactivalo para correr desde el agua.")]
+    public bool aparecerCercaTrasEmerger = true;
+
+    [Tooltip("Metros del jugador a los que aparece el Silbon tras el segundo parpadeo (siempre en tierra, sobre el NavMesh). " +
+             "Nunca aparece a menos del 85% de esta distancia, aunque el jugador este junto al agua.")]
+    [Min(1f)] public float distanciaAparicionCercana = 7f;
+
+    [Tooltip("En el segundo negro, girar al jugador hacia donde aparecio el Silbon (necesario si cerca del agua solo hay tierra a los lados o detras).")]
+    public bool orientarJugadorEnSegundoParpadeo = true;
+
+    [Tooltip("Duracion del cierre de ojos del segundo parpadeo.")]
+    public float duracionCierreSegundoParpadeo = 0.15f;
+
+    [Tooltip("Tiempo en negro del segundo parpadeo.")]
+    public float tiempoEnOscuridadSegundoParpadeo = 0.25f;
+
     [Tooltip("Evento que se dispara cuando el Silbon alcanza al jugador (Jumpscare / Game Over).")]
     public UnityEvent OnJugadorAtrapado;
 
@@ -632,9 +669,21 @@ public class FishingSilbonDirector : MonoBehaviour
         if (skyboxMalo != null) skyboxMalo.SetActive(true);
 
         // Posicionar y activar al Silbon frente al jugador
+        Vector3 posicionFinalEmergencia = Vector3.zero;
+        Vector3 escalaOriginalSilbon = silbonEnemigo != null ? silbonEnemigo.transform.localScale : Vector3.one;
+        // Mas grande solo mientras emerge; la profundidad se escala igual para que siga empezando oculto
+        float profundidadReal = profundidadEmergencia * escalaEmergencia;
         if (silbonEnemigo != null)
         {
-            if (puntoInicioPersecucion != null)
+            if (puntoEmergencia != null)
+            {
+                // Bajo el agua: subira hasta el punto durante la animacion de emerger
+                posicionFinalEmergencia = puntoEmergencia.position;
+                silbonEnemigo.transform.localScale = escalaOriginalSilbon * escalaEmergencia;
+                silbonEnemigo.transform.position = posicionFinalEmergencia + Vector3.down * profundidadReal;
+                silbonEnemigo.transform.rotation = puntoEmergencia.rotation;
+            }
+            else if (puntoInicioPersecucion != null)
             {
                 silbonEnemigo.transform.position = puntoInicioPersecucion.position;
                 silbonEnemigo.transform.rotation = puntoInicioPersecucion.rotation;
@@ -655,6 +704,10 @@ public class FishingSilbonDirector : MonoBehaviour
             {
                 navMeshAgentSilbon.enabled = false;
             }
+
+            // A oscuras: girar al jugador (solo Y) para que vea la emergencia al abrir los ojos
+            if (orientarJugadorAlEmerger)
+                OrientarJugadorHacia(silbonEnemigo.transform.position);
         }
 
         // Si la Timeline maneja pistas de animacion, posicionarla en el clímax
@@ -695,10 +748,52 @@ public class FishingSilbonDirector : MonoBehaviour
             animatorSilbon.Update(0f);
         }
 
-        // Tiempo en que el Silbon emerge y se levanta amenazante
+        // Tiempo en que el Silbon emerge y se levanta amenazante (sube desde el agua si hay punto de emergencia)
         if (duracionEmergencia > 0f)
         {
-            yield return new WaitForSeconds(duracionEmergencia);
+            if (puntoEmergencia != null && silbonEnemigo != null)
+            {
+                Vector3 inicio = posicionFinalEmergencia + Vector3.down * profundidadReal;
+                float t = 0f;
+                while (t < duracionEmergencia)
+                {
+                    t += Time.deltaTime;
+                    float avance = curvaEmergencia.Evaluate(Mathf.Clamp01(t / duracionEmergencia));
+                    silbonEnemigo.transform.position = Vector3.LerpUnclamped(inicio, posicionFinalEmergencia, avance);
+                    yield return null;
+                }
+                silbonEnemigo.transform.position = posicionFinalEmergencia;
+            }
+            else
+            {
+                yield return new WaitForSeconds(duracionEmergencia);
+            }
+        }
+
+        // Segundo parpadeo: a oscuras el Silbon aparece justo frente a donde mira el jugador
+        Vector3 posicionPersecucion = puntoInicioPersecucion != null ? puntoInicioPersecucion.position : (silbonEnemigo != null ? silbonEnemigo.transform.position : Vector3.zero);
+        if (puntoEmergencia != null && silbonEnemigo != null
+            && NavMesh.SamplePosition(silbonEnemigo.transform.position, out NavMeshHit orilla, 6f, NavMesh.AllAreas))
+            posicionPersecucion = orilla.position; // Sin aparicion cercana: corre desde la orilla mas proxima al punto de emergencia
+        if (aparecerCercaTrasEmerger && silbonEnemigo != null && jugadorOcular != null)
+        {
+            yield return StartCoroutine(RutinaFundidoBlink(duracionCierreSegundoParpadeo, 0f, 1.0f));
+
+            posicionPersecucion = CalcularAparicionCercana();
+            silbonEnemigo.transform.localScale = escalaOriginalSilbon; // A oscuras vuelve a su tamaño normal
+            silbonEnemigo.transform.position = posicionPersecucion;
+            Vector3 haciaJugador = jugadorOcular.position - posicionPersecucion;
+            haciaJugador.y = 0f;
+            if (haciaJugador.sqrMagnitude > 0.001f)
+                silbonEnemigo.transform.rotation = Quaternion.LookRotation(haciaJugador);
+
+            // A oscuras: el jugador queda mirando al Silbon al abrir los ojos
+            if (orientarJugadorEnSegundoParpadeo)
+                OrientarJugadorHacia(posicionPersecucion);
+
+            yield return new WaitForSeconds(tiempoEnOscuridadSegundoParpadeo);
+            yield return StartCoroutine(RutinaFundidoBlink(duracionAperturaOjos, 1.0f, 0.0f));
+            Debug.Log($"[Silbon] Segundo parpadeo: aparece a {Vector3.Distance(jugadorOcular.position, posicionPersecucion):F1}m del jugador.");
         }
 
         if (audioManager != null)
@@ -722,8 +817,8 @@ public class FishingSilbonDirector : MonoBehaviour
         {
             navMeshAgentSilbon.enabled = true;
             navMeshAgentSilbon.speed = velocidadPersecucion;
-            if (puntoInicioPersecucion != null)
-                navMeshAgentSilbon.Warp(puntoInicioPersecucion.position);
+            if (aparecerCercaTrasEmerger || puntoEmergencia != null || puntoInicioPersecucion != null)
+                navMeshAgentSilbon.Warp(posicionPersecucion);
         }
 
         // Iniciar persecución continua tras el jugador
@@ -769,6 +864,78 @@ public class FishingSilbonDirector : MonoBehaviour
             }
             yield return new WaitForSeconds(0.1f);
         }
+    }
+
+    /// <summary>
+    /// Gira el rig del jugador solo en Y, alrededor de la cabeza, para que mire hacia 'objetivo'.
+    /// Llamar SOLO con la pantalla en negro (equivale a un snap turn, no marea). Nunca toca la altura.
+    /// </summary>
+    private void OrientarJugadorHacia(Vector3 objetivo)
+    {
+        if (rigJugador == null || jugadorOcular == null) return;
+
+        Vector3 mirada = Vector3.ProjectOnPlane(jugadorOcular.forward, Vector3.up);
+        Vector3 hacia = Vector3.ProjectOnPlane(objetivo - jugadorOcular.position, Vector3.up);
+        if (mirada.sqrMagnitude < 0.0001f || hacia.sqrMagnitude < 0.0001f) return;
+
+        rigJugador.RotateAround(jugadorOcular.position, Vector3.up, Vector3.SignedAngle(mirada, hacia, Vector3.up));
+    }
+
+    /// <summary>
+    /// Punto en tierra (sobre el NavMesh, nunca en el agua) a ~'distanciaAparicionCercana' del jugador.
+    /// Recorre 16 direcciones alrededor y, entre las validas, elige la mas cercana a donde mira el jugador
+    /// para que el giro a oscuras sea el minimo. Si no hay ninguna, usa 'Punto Inicio Persecucion'.
+    /// </summary>
+    private Vector3 CalcularAparicionCercana()
+    {
+        Vector3 frente = Vector3.ProjectOnPlane(jugadorOcular.forward, Vector3.up);
+        if (frente.sqrMagnitude < 0.0001f) frente = Vector3.forward;
+        frente.Normalize();
+
+        Vector3 piesJugador = jugadorOcular.position;
+        piesJugador.y = rigJugador != null ? rigJugador.position.y : piesJugador.y - 1.6f;
+
+        // Lejos para no atraparte al instante, cerca para que se sienta encima
+        float distanciaMinima = Mathf.Max(distanciaCapturaJugador + 2f, distanciaAparicionCercana * 0.85f);
+        float distanciaMaxima = distanciaAparicionCercana * 1.5f;
+
+        bool encontrado = false;
+        Vector3 mejor = Vector3.zero;
+        float mejorAngulo = float.MaxValue;
+
+        for (int i = 0; i < 16; i++)
+        {
+            float angulo = i * 22.5f;
+            Vector3 direccion = Quaternion.Euler(0f, angulo, 0f) * frente;
+            Vector3 candidato = piesJugador + direccion * distanciaAparicionCercana;
+
+            // Radio corto: si el candidato cae en el agua, el NavMesh mas cercano estaria en la orilla junto al jugador
+            if (!NavMesh.SamplePosition(candidato, out NavMeshHit hit, 1.5f, NavMesh.AllAreas)) continue;
+
+            Vector3 plano = hit.position - piesJugador;
+            plano.y = 0f;
+            float distancia = plano.magnitude;
+            if (distancia < distanciaMinima || distancia > distanciaMaxima) continue;
+
+            float desvio = Vector3.Angle(frente, plano);
+            if (desvio < mejorAngulo)
+            {
+                mejorAngulo = desvio;
+                mejor = hit.position;
+                encontrado = true;
+            }
+        }
+
+        if (encontrado) return mejor;
+
+        if (puntoInicioPersecucion != null)
+        {
+            Debug.LogWarning("[Silbon] No hay tierra con NavMesh alrededor del jugador; aparece en 'Punto Inicio Persecucion'.");
+            return puntoInicioPersecucion.position;
+        }
+
+        Debug.LogWarning("[Silbon] No hay NavMesh cerca del jugador ni 'Punto Inicio Persecucion'; aparece frente al jugador sin NavMesh.");
+        return piesJugador + frente * distanciaAparicionCercana;
     }
 
     private IEnumerator RutinaFundidoBlink(float duracion, float pesoInicio, float pesoFin)

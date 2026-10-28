@@ -37,23 +37,86 @@ public class DialogueController : MonoBehaviour
     [Tooltip("Se dispara cuando se completa el ultimo dialogo")]
     public UnityEvent alCompletarTodosLosDialogos;
 
+    [Header("Inicio / Activacion")]
+    [Tooltip("Si esta activo, los dialogos y flechas inician totalmente desactivados (ocultos) y NO se muestra el primer dialogo en Start. Se activara cuando se llame a ActivarDialogos() o en sincronia con AparicionPorPeces.")]
+    public bool iniciarDesactivado = false;
+
+    [Tooltip("Opcional: Componente AparicionPorPeces con el que sincronizar la activacion automatica. Si esta vacio y 'iniciarDesactivado' esta activo, se buscara solo.")]
+    public AparicionPorPeces sincronizarConAparicion;
+
     [Header("Pruebas en Editor (PC)")]
     [Tooltip("Permite presionar Flecha Derecha / D para avanzar y Flecha Izquierda / A para retroceder")]
     public bool habilitarTeclasDebug = true;
 
     public int IndiceActual { get; private set; } = 0;
     public bool DialogosCompletados { get; private set; } = false;
+    public bool EsperandoActivacion => _esperandoActivacion;
+
+    private bool _esperandoActivacion = false;
 
     private void Awake()
     {
         AutoBuscarReferencias();
+        if (iniciarDesactivado)
+        {
+            _esperandoActivacion = true;
+            OcultarTodosLosDialogosYFlechas();
+        }
     }
 
     private void Start()
     {
         AutoBuscarReferencias();
         ConectarFlechas();
-        MostrarDialogo(0);
+
+        if (iniciarDesactivado)
+        {
+            _esperandoActivacion = true;
+            OcultarTodosLosDialogosYFlechas();
+
+            // Buscar automaticamente si hay un AparicionPorPeces vinculado
+            if (sincronizarConAparicion == null)
+            {
+                var apariciones = FindObjectsByType<AparicionPorPeces>(FindObjectsSortMode.None);
+                foreach (var ap in apariciones)
+                {
+                    if (ap.ObjetosAMostrar.Contains(gameObject))
+                    {
+                        sincronizarConAparicion = ap;
+                        break;
+                    }
+                    foreach (var diag in listaDialogos)
+                    {
+                        if (diag != null && ap.ObjetosAMostrar.Contains(diag))
+                        {
+                            sincronizarConAparicion = ap;
+                            break;
+                        }
+                    }
+                    if (sincronizarConAparicion != null) break;
+                }
+
+                if (sincronizarConAparicion == null && apariciones.Length == 1)
+                {
+                    sincronizarConAparicion = apariciones[0];
+                }
+            }
+
+            if (sincronizarConAparicion != null)
+            {
+                sincronizarConAparicion.alAparecer.RemoveListener(ActivarDialogos);
+                sincronizarConAparicion.alAparecer.AddListener(ActivarDialogos);
+
+                if (sincronizarConAparicion.YaAparecieron)
+                {
+                    ActivarDialogos();
+                }
+            }
+        }
+        else
+        {
+            MostrarDialogo(0);
+        }
     }
 
     private void AutoBuscarReferencias()
@@ -106,6 +169,22 @@ public class DialogueController : MonoBehaviour
 
     private void Update()
     {
+        if (_esperandoActivacion)
+        {
+            if (sincronizarConAparicion != null && sincronizarConAparicion.YaAparecieron)
+            {
+                ActivarDialogos();
+                return;
+            }
+
+            if (listaDialogos.Count > 0 && listaDialogos[0] != null && listaDialogos[0].activeSelf)
+            {
+                ActivarDialogos();
+                return;
+            }
+            return;
+        }
+
         if (!habilitarTeclasDebug || DialogosCompletados) return;
 
 #if ENABLE_INPUT_SYSTEM
@@ -196,6 +275,40 @@ public class DialogueController : MonoBehaviour
     }
 
     /// <summary>
+    /// Oculta todas las tarjetas de dialogo y las flechas.
+    /// </summary>
+    public void OcultarTodosLosDialogosYFlechas()
+    {
+        for (int i = 0; i < listaDialogos.Count; i++)
+        {
+            if (listaDialogos[i] != null)
+                listaDialogos[i].SetActive(false);
+        }
+
+        if (flechaAnterior != null) flechaAnterior.gameObject.SetActive(false);
+        if (flechaSiguiente != null) flechaSiguiente.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Activa e inicia la secuencia de dialogos (muestra el primer dialogo y flechas correspondientes).
+    /// Puede ser llamado desde eventos de Unity (como AparicionPorPeces.alAparecer) o desde codigo.
+    /// </summary>
+    [ContextMenu("Activar e Iniciar Dialogos")]
+    public void ActivarDialogos()
+    {
+        _esperandoActivacion = false;
+        DialogosCompletados = false;
+        gameObject.SetActive(true);
+        MostrarDialogo(0);
+        Debug.Log($"[Dialogo] '{name}' activado e iniciado en dialogo 1.", this);
+    }
+
+    /// <summary>
+    /// Alias de ActivarDialogos para compatibilidad.
+    /// </summary>
+    public void IniciarDialogos() => ActivarDialogos();
+
+    /// <summary>
     /// Reinicia los dialogos al principio (util si se desea reabrir el tutorial).
     /// </summary>
     public void ReiniciarDialogos()
@@ -203,5 +316,13 @@ public class DialogueController : MonoBehaviour
         DialogosCompletados = false;
         gameObject.SetActive(true);
         MostrarDialogo(0);
+    }
+
+    private void OnDestroy()
+    {
+        if (sincronizarConAparicion != null)
+        {
+            sincronizarConAparicion.alAparecer.RemoveListener(ActivarDialogos);
+        }
     }
 }

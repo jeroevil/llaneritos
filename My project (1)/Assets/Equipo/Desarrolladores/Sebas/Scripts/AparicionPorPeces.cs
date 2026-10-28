@@ -30,6 +30,8 @@ public class AparicionPorPeces : MonoBehaviour
     public UnityEvent alAparecer;
 
     public bool YaAparecieron { get; private set; }
+    public List<GameObject> ObjetosAMostrar => objetosAMostrar;
+    public int PezRequerido => pezRequerido;
 
     void Awake()
     {
