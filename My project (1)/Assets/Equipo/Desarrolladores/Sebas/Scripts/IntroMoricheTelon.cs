@@ -56,6 +56,10 @@ public class IntroMoricheTelon : MonoBehaviour
     [Range(1f, 4f)]
     public float distanciaPantalla = 2.5f;
 
+    [Tooltip("Metros que la pantalla sube (+) o baja (-) respecto a donde mira el jugador. La pantalla se inclina para seguir de frente a los ojos. Se puede ajustar en Play.")]
+    [Range(-1.5f, 1.5f)]
+    public float alturaPantalla = 0f;
+
     [Header("Control de Jugador")]
     [Tooltip("Desactiva temporalmente el script PinchToWalk durante la intro y lo reactiva al abrir el telon")]
     public bool bloquearCaminataEnIntro = true;
@@ -278,6 +282,17 @@ public class IntroMoricheTelon : MonoBehaviour
     /// <summary>
     /// Reproduce el video tutorial completo frente a los ojos y al terminar muestra el logo.
     /// </summary>
+    /// <summary>
+    /// Pone la pantalla (hija de la camara) frente a los ojos, subida o bajada segun alturaPantalla,
+    /// y la gira para que quede de frente a los ojos.
+    /// </summary>
+    private void ColocarPantalla(Transform pantalla)
+    {
+        Vector3 posicion = Vector3.forward * distanciaPantalla + Vector3.up * alturaPantalla;
+        pantalla.localPosition = posicion;
+        pantalla.localRotation = Quaternion.LookRotation(posicion, Vector3.up);
+    }
+
     private IEnumerator RutinaVideoTutorial()
     {
         if (logoMoriche != null)
@@ -290,8 +305,7 @@ public class IntroMoricheTelon : MonoBehaviour
             // pantalla fija a la vista, igual que el logo
             _padreOriginalPantalla = pantalla.transform.parent;
             pantalla.transform.SetParent(camaraOcular, false);
-            pantalla.transform.localPosition = Vector3.forward * distanciaPantalla;
-            pantalla.transform.localRotation = Quaternion.identity;
+            ColocarPantalla(pantalla.transform);
         }
 
         videoTutorial.isLooping = false;
@@ -324,6 +338,8 @@ public class IntroMoricheTelon : MonoBehaviour
         while (!terminado && t < limite)
         {
             t += Time.unscaledDeltaTime;
+            // se recoloca cada cuadro para que la distancia y la altura se puedan ajustar en Play
+            if (camaraOcular != null) ColocarPantalla(pantalla.transform);
             yield return null;
         }
         videoTutorial.loopPointReached -= alTerminar;
