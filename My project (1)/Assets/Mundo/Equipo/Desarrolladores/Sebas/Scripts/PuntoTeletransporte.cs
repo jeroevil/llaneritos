@@ -60,6 +60,11 @@ public class PuntoTeletransporte : MonoBehaviour
     // Compartido entre todos los botones: evita dos saltos a la vez por doble pellizco
     static bool teletransportando;
 
+    // Pose del rig antes de un teletransporte con recuerdo (ver TeletransportarYRecordar)
+    bool hayPosicionGuardada;
+    Vector3 posicionGuardada;
+    Quaternion rotacionGuardada;
+
     Vector3 escalaInicial;
     MaterialPropertyBlock bloque;
     int apuntadores;
@@ -103,17 +108,60 @@ public class PuntoTeletransporte : MonoBehaviour
             Debug.LogWarning("[Teletransporte] Faltan referencias (destino, rig o cabeza) en " + name, this);
             return;
         }
-        StartCoroutine(RutinaTeletransporte());
+        StartCoroutine(RutinaTeletransporte(false));
     }
 
-    IEnumerator RutinaTeletransporte()
+    /// <summary>
+    /// Igual que Teletransportar, pero antes guarda donde estaba el jugador para poder regresarlo
+    /// despues con <see cref="VolverAlOrigen"/>.
+    /// </summary>
+    public void TeletransportarYRecordar()
     {
+        if (teletransportando) return;
+        if (destino == null || rig == null || cabeza == null)
+        {
+            Debug.LogWarning("[Teletransporte] Faltan referencias (destino, rig o cabeza) en " + name, this);
+            return;
+        }
+        GuardarPosicion();
+        StartCoroutine(RutinaTeletransporte(false));
+    }
+
+    /// <summary>
+    /// Regresa al jugador a donde estaba cuando se uso TeletransportarYRecordar. Si no hay posicion
+    /// guardada no hace nada. Si hay un salto en curso, espera a que termine.
+    /// </summary>
+    public void VolverAlOrigen()
+    {
+        if (!hayPosicionGuardada || rig == null) return;
+        StartCoroutine(RutinaTeletransporte(true));
+    }
+
+    void GuardarPosicion()
+    {
+        posicionGuardada = rig.position;
+        rotacionGuardada = rig.rotation;
+        hayPosicionGuardada = true;
+    }
+
+    void RestaurarRig()
+    {
+        rig.SetPositionAndRotation(posicionGuardada, rotacionGuardada);
+        hayPosicionGuardada = false;
+        Physics.SyncTransforms();
+        if (caminata != null) caminata.ReubicarCentro(rig.position);
+    }
+
+    IEnumerator RutinaTeletransporte(bool volver)
+    {
+        if (volver) while (teletransportando) yield return null;
         teletransportando = true;
 
         yield return Fundir(0f, 1f, duracionFundidoSalida);
         if (fundido != null && tiempoEnNegro > 0f) yield return new WaitForSeconds(tiempoEnNegro);
 
-        MoverRig();
+        if (volver) RestaurarRig();
+        else MoverRig();
         alTeletransportar.Invoke();
 
         yield return Fundir(1f, 0f, duracionFundidoEntrada);

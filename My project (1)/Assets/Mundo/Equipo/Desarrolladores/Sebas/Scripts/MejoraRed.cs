@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -45,6 +46,25 @@ public class MejoraRed : MonoBehaviour
     [Tooltip("Objeto que se muestra/oculta segun haya mejora disponible (normalmente la raiz del boton).")]
     [SerializeField] GameObject objetoBoton;
 
+    [Header("Boton de Finalizar")]
+    [Tooltip("RayInteractable del boton que termina la experiencia. Vacio = no hay boton de finalizar.")]
+    [SerializeField] RayInteractable interactableFinalizar;
+    [Tooltip("Objeto que se muestra/oculta junto con el boton de mejora (raiz del boton finalizar).")]
+    [SerializeField] GameObject objetoBotonFinalizar;
+    [Tooltip("OVRScreenFade de la camara. Si esta vacio, se cierra sin fundido.")]
+    [SerializeField] OVRScreenFade fundido;
+    [SerializeField, Min(0f)] float duracionFundidoFinal = 1f;
+
+    [Header("Teletransporte a la decision")]
+    [Tooltip("Boton de teletransporte cuyo destino es 'teletransporte decicion hermanos' (la Cuarta flecha). " +
+             "Al aparecer la mejora lleva ahi al jugador; al presionar Continuar lo regresa a donde estaba. Vacio = no se teletransporta.")]
+    [SerializeField] PuntoTeletransporte puntoDecision;
+
+    [Header("Objetos que desaparecen")]
+    [Tooltip("Se apagan la primera vez que aparece el boton de mejora (el pez del nivel 1, por defecto el tercero), " +
+             "justo cuando aparecen los botones Continuar y Finalizar.")]
+    [SerializeField] List<GameObject> ocultarAlAparecerBotones = new List<GameObject>();
+
     [Header("Niveles (el 0 es la red inicial)")]
     [SerializeField] List<NivelRed> niveles = new List<NivelRed>
     {
@@ -54,7 +74,7 @@ public class MejoraRed : MonoBehaviour
     };
 
     [Header("Pruebas en Editor (PC)")]
-    [Tooltip("Tecla U: presiona el boton de mejora (solo si esta disponible). Tecla I: escribe el diagnostico en la consola.")]
+    [Tooltip("Tecla U: presiona el boton de mejora (solo si esta disponible). Tecla I: escribe el diagnostico en la consola. Tecla F: finaliza (cierra el Play).")]
     [SerializeField] bool habilitarTeclasDebug = true;
 
     [Header("Eventos")]
@@ -62,15 +82,20 @@ public class MejoraRed : MonoBehaviour
     public EventoNivel alMejorar;
     [Tooltip("Se dispara cuando aparece el boton porque hay una mejora disponible.")]
     public UnityEvent alHaberMejoraDisponible;
+    [Tooltip("Se dispara al presionar Finalizar, antes de cerrar el juego.")]
+    public UnityEvent alFinalizar;
 
     public int NivelActual { get; private set; }
     public bool HayMejoraDisponible { get; private set; }
 
     bool mejoraPendiente;
+    bool finalizando;
+    bool finalizarVisible;
 
     void Awake()
     {
         if (objetoBoton != null) objetoBoton.SetActive(false);
+        if (objetoBotonFinalizar != null) objetoBotonFinalizar.SetActive(false);
     }
 
     void Start()
@@ -82,11 +107,19 @@ public class MejoraRed : MonoBehaviour
     {
         if (interactable != null) interactable.WhenPointerEventRaised += AlEventoPuntero;
         else Debug.LogWarning("[MejoraRed] Falta asignar el RayInteractable del boton en " + name, this);
+
+        if (interactableFinalizar != null) interactableFinalizar.WhenPointerEventRaised += AlEventoPunteroFinalizar;
     }
 
     void OnDisable()
     {
         if (interactable != null) interactable.WhenPointerEventRaised -= AlEventoPuntero;
+        if (interactableFinalizar != null) interactableFinalizar.WhenPointerEventRaised -= AlEventoPunteroFinalizar;
+    }
+
+    void AlEventoPunteroFinalizar(PointerEvent evento)
+    {
+        if (evento.Type == PointerEventType.Select) Finalizar();
     }
 
     void AlEventoPuntero(PointerEvent evento)
@@ -110,10 +143,16 @@ public class MejoraRed : MonoBehaviour
             if (objetoBoton != null) objetoBoton.SetActive(disponible);
             if (disponible)
             {
+                OcultarObjetos();
+                if (puntoDecision != null) puntoDecision.TeletransportarYRecordar();
                 Debug.Log($"[MejoraRed] Mejora al nivel {siguiente} disponible (pez {director.currentFishCount}): boton visible. Presionalo para mejorar.", this);
                 alHaberMejoraDisponible.Invoke();
             }
         }
+
+        // Finalizar se ofrece junto con la mejora, y se queda si ya no quedan mas mejoras
+        bool sinMasMejoras = siguiente >= niveles.Count && !mejoraPendiente;
+        ActualizarBotonFinalizar((disponible || sinMasMejoras) && !finalizando);
 
         // La red no se toca en pleno lanzamiento: se espera a que vuelva a la orilla
         if (mejoraPendiente && RedEnReposo())
@@ -134,8 +173,62 @@ public class MejoraRed : MonoBehaviour
 
         mejoraPendiente = true;
         HayMejoraDisponible = false;
+        if (puntoDecision != null) puntoDecision.VolverAlOrigen();
         if (objetoBoton != null) objetoBoton.SetActive(false);
+        ActualizarBotonFinalizar(false);
         Debug.Log($"[MejoraRed] Mejora al nivel {NivelActual + 1} solicitada" + (RedEnReposo() ? "." : " (se aplica cuando la red vuelva a la orilla)."), this);
+    }
+
+    void OcultarObjetos()
+    {
+        foreach (var o in ocultarAlAparecerBotones)
+            if (o != null) o.SetActive(false);
+    }
+
+    void ActualizarBotonFinalizar(bool visible)
+    {
+        if (visible == finalizarVisible) return;
+        finalizarVisible = visible;
+        if (objetoBotonFinalizar != null) objetoBotonFinalizar.SetActive(visible);
+    }
+
+    /// <summary>
+    /// Termina la experiencia: fundido a negro y cierre del juego (en el editor detiene el Play).
+    /// Lo llama el boton Finalizar; tambien sirve desde UnityEvents.
+    /// </summary>
+    [ContextMenu("Finalizar (prueba)")]
+    public void Finalizar()
+    {
+        if (finalizando) return;
+        finalizando = true;
+        HayMejoraDisponible = false;
+        if (objetoBoton != null) objetoBoton.SetActive(false);
+        ActualizarBotonFinalizar(false);
+        StartCoroutine(RutinaFinalizar());
+    }
+
+    IEnumerator RutinaFinalizar()
+    {
+        Debug.Log("[MejoraRed] Finalizar presionado: cerrando la experiencia.", this);
+        alFinalizar.Invoke();
+
+        if (fundido != null)
+        {
+            float t = 0f;
+            while (t < duracionFundidoFinal)
+            {
+                t += Time.deltaTime;
+                fundido.SetExplicitFade(Mathf.Clamp01(t / duracionFundidoFinal));
+                yield return null;
+            }
+            fundido.SetExplicitFade(1f);
+        }
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     void LeerTeclasDebug()
@@ -146,9 +239,11 @@ public class MejoraRed : MonoBehaviour
         if (teclado == null) return;
         if (teclado.uKey.wasPressedThisFrame) Mejorar();
         if (teclado.iKey.wasPressedThisFrame) Diagnosticar();
+        if (teclado.fKey.wasPressedThisFrame) Finalizar();
 #else
         if (Input.GetKeyDown(KeyCode.U)) Mejorar();
         if (Input.GetKeyDown(KeyCode.I)) Diagnosticar();
+        if (Input.GetKeyDown(KeyCode.F)) Finalizar();
 #endif
     }
 
@@ -172,6 +267,15 @@ public class MejoraRed : MonoBehaviour
             Linea(false, "El boton esta activo pero un PADRE esta apagado: '" + PadreApagado(objetoBoton.transform) + "'");
         if (objetoBoton != null && interactable != null)
             Linea(interactable.transform.IsChildOf(objetoBoton.transform), "El RayInteractable esta dentro del objeto del boton");
+
+        Linea(puntoDecision != null, "Punto de teletransporte a la decision asignado" + (puntoDecision != null ? $" ('{puntoDecision.name}')" : " (opcional)"));
+        Linea(interactableFinalizar != null, "RayInteractable del boton Finalizar asignado");
+        Linea(objetoBotonFinalizar != null, "Objeto del boton Finalizar asignado");
+        if (objetoBotonFinalizar != null && interactableFinalizar != null)
+            Linea(interactableFinalizar.transform.IsChildOf(objetoBotonFinalizar.transform), "El RayInteractable de Finalizar esta dentro de su objeto");
+
+        for (int i = 0; i < ocultarAlAparecerBotones.Count; i++)
+            Linea(ocultarAlAparecerBotones[i] != null, $"Objeto a ocultar {i}: " + (ocultarAlAparecerBotones[i] != null ? ocultarAlAparecerBotones[i].name : "VACIO"));
 
         Linea(niveles.Count >= 2, $"Niveles configurados: {niveles.Count}");
         for (int i = 0; i < niveles.Count; i++)
