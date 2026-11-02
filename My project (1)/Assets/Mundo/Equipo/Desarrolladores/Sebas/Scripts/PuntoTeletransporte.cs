@@ -6,7 +6,7 @@ using Oculus.Interaction;
 /// <summary>
 /// Boton de teletransporte entre zonas. Se señala con el rayo de la mano o del control
 /// (mismo sistema que FlechaDialogo: RayInteractable + ColliderSurface) y al seleccionar
-/// (pinza o gatillo) lleva al jugador al destino asignado, con fundido a negro.
+/// (pinza o gatillo) lleva al jugador al destino asignado, sin fundido (salto instantaneo).
 ///
 /// No busca nada por su cuenta: todas las referencias se asignan en el Inspector.
 /// Solo mueve el rig en XZ y lo gira en Y; la altura de la cabeza la sigue dando el tracking.
@@ -36,13 +36,6 @@ public class PuntoTeletransporte : MonoBehaviour
 
     [Tooltip("Opcional: re-centra el limite de caminata de PinchToWalk en la zona nueva.")]
     [SerializeField] PinchToWalk caminata;
-
-    [Header("Fundido a Negro")]
-    [Tooltip("OVRScreenFade de la camara (desactiva su 'Fade On Start' si no lo quieres al iniciar). Si está vacío, el salto es instantáneo.")]
-    [SerializeField] OVRScreenFade fundido;
-    [SerializeField, Min(0f)] float duracionFundidoSalida = 0.2f;
-    [SerializeField, Min(0f)] float tiempoEnNegro = 0.1f;
-    [SerializeField, Min(0f)] float duracionFundidoEntrada = 0.25f;
 
     [Header("Aspecto (opcional)")]
     [SerializeField] Renderer visual;
@@ -157,14 +150,12 @@ public class PuntoTeletransporte : MonoBehaviour
         if (volver) while (teletransportando) yield return null;
         teletransportando = true;
 
-        yield return Fundir(0f, 1f, duracionFundidoSalida);
-        if (fundido != null && tiempoEnNegro > 0f) yield return new WaitForSeconds(tiempoEnNegro);
+        // Salto instantaneo, sin fundido: el parpadeo queda solo para el Silbon
+        yield return null;
 
         if (volver) RestaurarRig();
         else MoverRig();
         alTeletransportar.Invoke();
-
-        yield return Fundir(1f, 0f, duracionFundidoEntrada);
 
         teletransportando = false;
     }
@@ -191,20 +182,6 @@ public class PuntoTeletransporte : MonoBehaviour
         Physics.SyncTransforms();
 
         if (caminata != null) caminata.ReubicarCentro(rig.position);
-    }
-
-    IEnumerator Fundir(float desde, float hasta, float duracion)
-    {
-        if (fundido == null) yield break;
-
-        float t = 0f;
-        while (t < duracion)
-        {
-            t += Time.deltaTime;
-            fundido.SetExplicitFade(Mathf.Lerp(desde, hasta, t / duracion));
-            yield return null;
-        }
-        fundido.SetExplicitFade(hasta);
     }
 
     void Update()

@@ -51,8 +51,7 @@ public class MejoraRed : MonoBehaviour
     [SerializeField] RayInteractable interactableFinalizar;
     [Tooltip("Objeto que se muestra/oculta junto con el boton de mejora (raiz del boton finalizar).")]
     [SerializeField] GameObject objetoBotonFinalizar;
-    [Tooltip("OVRScreenFade de la camara. Si esta vacio, se cierra sin fundido.")]
-    [SerializeField] OVRScreenFade fundido;
+    // El fundido usa el parpadeo del Silbon (FundidoParpadeo): no hay que asignar nada.
     [SerializeField, Min(0f)] float duracionFundidoFinal = 1f;
 
     [Header("Teletransporte a la decision")]
@@ -212,17 +211,7 @@ public class MejoraRed : MonoBehaviour
         Debug.Log("[MejoraRed] Finalizar presionado: cerrando la experiencia.", this);
         alFinalizar.Invoke();
 
-        if (fundido != null)
-        {
-            float t = 0f;
-            while (t < duracionFundidoFinal)
-            {
-                t += Time.deltaTime;
-                fundido.SetExplicitFade(Mathf.Clamp01(t / duracionFundidoFinal));
-                yield return null;
-            }
-            fundido.SetExplicitFade(1f);
-        }
+        yield return FundidoParpadeo.Fundir(0f, 1f, duracionFundidoFinal);
 
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;

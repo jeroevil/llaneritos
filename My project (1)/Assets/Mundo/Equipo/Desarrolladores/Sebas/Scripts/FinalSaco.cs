@@ -49,8 +49,7 @@ public class FinalSaco : MonoBehaviour
     [SerializeField, Min(0.1f)] float duracionRecorrido = 5f;
 
     [Header("Fundidos")]
-    [Tooltip("OVRScreenFade de la camara. Si esta vacio, los cambios son instantaneos.")]
-    [SerializeField] OVRScreenFade fundido;
+    // Usa el parpadeo del Silbon (FundidoParpadeo): no hay que asignar nada.
     [SerializeField, Min(0f)] float duracionFundidoEntrada = 0.6f;
     [SerializeField, Min(0f)] float tiempoEnNegro = 0.5f;
     [SerializeField, Min(0f)] float duracionFundidoApertura = 0.8f;
@@ -149,11 +148,11 @@ public class FinalSaco : MonoBehaviour
                 saco.transform.position = Vector3.Lerp(inicioRecorrido.position, finRecorrido.position, t / duracionRecorrido);
 
             // Fundido final solapado con el ultimo tramo del recorrido
-            if (t >= duracionRecorrido - duracionFundidoFinal && fundido != null)
-                fundido.SetExplicitFade(Mathf.InverseLerp(duracionRecorrido - duracionFundidoFinal, duracionRecorrido, t));
+            if (t >= duracionRecorrido - duracionFundidoFinal)
+                FundidoParpadeo.Poner(Mathf.InverseLerp(duracionRecorrido - duracionFundidoFinal, duracionRecorrido, t));
             yield return null;
         }
-        if (fundido != null) fundido.SetExplicitFade(1f);
+        FundidoParpadeo.Poner(1f);
 
         alTerminarFinal.Invoke();
         Debug.Log("[FinalSaco] Fin del recorrido.", this);
@@ -190,15 +189,7 @@ public class FinalSaco : MonoBehaviour
 
     IEnumerator Fundir(float desde, float hasta, float duracion)
     {
-        if (fundido == null) yield break;
-        float t = 0f;
-        while (t < duracion)
-        {
-            t += Time.deltaTime;
-            fundido.SetExplicitFade(Mathf.Lerp(desde, hasta, t / duracion));
-            yield return null;
-        }
-        fundido.SetExplicitFade(hasta);
+        return FundidoParpadeo.Fundir(desde, hasta, duracion);
     }
 
     void Cerrar()
