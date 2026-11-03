@@ -1151,10 +1151,6 @@ MonoBehaviour:
   rig: {fileID: 797871917}
   cabeza: {fileID: 797871917}
   caminata: {fileID: 797871918}
-  fundido: {fileID: 1548530511}
-  duracionFundidoSalida: 0.2
-  tiempoEnNegro: 0.1
-  duracionFundidoEntrada: 0.25
   visual: {fileID: 0}
   colorNormal: {r: 0.96, g: 0.96, b: 0.94, a: 1}
   colorApuntado: {r: 0.98, g: 0.78, b: 0.25, a: 1}
@@ -4232,10 +4228,6 @@ MonoBehaviour:
   rig: {fileID: 797871917}
   cabeza: {fileID: 797871917}
   caminata: {fileID: 797871918}
-  fundido: {fileID: 1548530511}
-  duracionFundidoSalida: 0.2
-  tiempoEnNegro: 0.1
-  duracionFundidoEntrada: 0.25
   visual: {fileID: 0}
   colorNormal: {r: 0.96, g: 0.96, b: 0.94, a: 1}
   colorApuntado: {r: 0.98, g: 0.78, b: 0.25, a: 1}
@@ -9182,10 +9174,6 @@ MonoBehaviour:
   rig: {fileID: 797871917}
   cabeza: {fileID: 797871917}
   caminata: {fileID: 797871918}
-  fundido: {fileID: 1548530511}
-  duracionFundidoSalida: 0.2
-  tiempoEnNegro: 0.1
-  duracionFundidoEntrada: 0.25
   visual: {fileID: 0}
   colorNormal: {r: 0.96, g: 0.96, b: 0.94, a: 1}
   colorApuntado: {r: 0.98, g: 0.78, b: 0.25, a: 1}
@@ -26751,7 +26739,6 @@ MonoBehaviour:
   inicioRecorrido: {fileID: 1626862874}
   finRecorrido: {fileID: 604949894}
   duracionRecorrido: 15
-  fundido: {fileID: 1548530511}
   duracionFundidoEntrada: 0.6
   tiempoEnNegro: 0.5
   duracionFundidoApertura: 0.8
@@ -63274,10 +63261,6 @@ MonoBehaviour:
   rig: {fileID: 797871917}
   cabeza: {fileID: 797871917}
   caminata: {fileID: 797871918}
-  fundido: {fileID: 1548530511}
-  duracionFundidoSalida: 0.2
-  tiempoEnNegro: 0.1
-  duracionFundidoEntrada: 0.25
   visual: {fileID: 0}
   colorNormal: {r: 0.96, g: 0.96, b: 0.94, a: 1}
   colorApuntado: {r: 0.98, g: 0.78, b: 0.25, a: 1}
@@ -65332,7 +65315,6 @@ MonoBehaviour:
   objetoBoton: {fileID: 1579611349}
   interactableFinalizar: {fileID: 95249400}
   objetoBotonFinalizar: {fileID: 95249395}
-  fundido: {fileID: 0}
   duracionFundidoFinal: 1
   puntoDecision: {fileID: 1940802333}
   ocultarAlAparecerBotones:
