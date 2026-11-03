@@ -30,6 +30,18 @@ public class DialogueController : MonoBehaviour
     [Tooltip("Ocultar la flecha Anterior cuando estas en el primer dialogo")]
     public bool ocultarFlechaAnteriorEnInicio = true;
 
+    [Header("Voz")]
+    [Tooltip("Clip de voz de cada dialogo, en el mismo orden que la lista de dialogos. Si un dialogo no tiene voz, deja su casilla vacia.")]
+    public List<AudioClip> audiosDialogos = new List<AudioClip>();
+
+    [Tooltip("AudioSource que reproduce la voz. Si esta vacio, se crea uno en este objeto.")]
+    public AudioSource fuenteVoz;
+
+    [Tooltip("Si esta activo, la voz suena en 3D desde la posicion de los dialogos.")]
+    public bool vozEspacial = true;
+
+    [Range(0f, 1f)] public float volumenVoz = 1f;
+
     [Header("Eventos")]
     [Tooltip("Se dispara cada vez que cambia el dialogo actual (pasa el indice 0, 1, 2...)")]
     public UnityEvent<int> alCambiarDialogo;
@@ -257,12 +269,43 @@ public class DialogueController : MonoBehaviour
             flechaAnterior.gameObject.SetActive(mostrarAnterior);
         }
 
+        ReproducirVoz(IndiceActual);
+
         alCambiarDialogo?.Invoke(IndiceActual);
         Debug.Log($"[Dialogo] Mostrando tarjeta {IndiceActual + 1} de {listaDialogos.Count}: {listaDialogos[IndiceActual]?.name}");
     }
 
+    /// <summary>
+    /// Reproduce el clip de voz del dialogo indicado (corta el anterior si seguia sonando).
+    /// </summary>
+    public void ReproducirVoz(int indice)
+    {
+        DetenerVoz();
+        if (indice < 0 || indice >= audiosDialogos.Count || audiosDialogos[indice] == null) return;
+
+        if (fuenteVoz == null)
+        {
+            fuenteVoz = gameObject.AddComponent<AudioSource>();
+            fuenteVoz.playOnAwake = false;
+            fuenteVoz.spatialBlend = vozEspacial ? 1f : 0f;
+        }
+
+        fuenteVoz.clip = audiosDialogos[indice];
+        fuenteVoz.volume = volumenVoz;
+        fuenteVoz.Play();
+    }
+
+    /// <summary>
+    /// Corta la voz que este sonando.
+    /// </summary>
+    public void DetenerVoz()
+    {
+        if (fuenteVoz != null && fuenteVoz.isPlaying) fuenteVoz.Stop();
+    }
+
     private void FinalizarSecuenciaDialogos()
     {
+        DetenerVoz();
         DialogosCompletados = true;
         Debug.Log("[Dialogo] Todos los dialogos completados con exito.");
 
@@ -279,6 +322,7 @@ public class DialogueController : MonoBehaviour
     /// </summary>
     public void OcultarTodosLosDialogosYFlechas()
     {
+        DetenerVoz();
         for (int i = 0; i < listaDialogos.Count; i++)
         {
             if (listaDialogos[i] != null)
