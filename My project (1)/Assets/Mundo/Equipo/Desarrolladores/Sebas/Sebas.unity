@@ -26470,6 +26470,7 @@ GameObject:
   - component: {fileID: 943990108}
   - component: {fileID: 943990109}
   - component: {fileID: 943990110}
+  - component: {fileID: 943990111}
   m_Layer: 0
   m_Name: Director_juego
   m_TagString: Untagged
@@ -26748,6 +26749,26 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   alTerminarFinal:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &943990111
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 943990103}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f8aa5787e3c0c5499d2eeb1cdc1e576, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DesaparecerAlEmerger
+  director: {fileID: 943990104}
+  objetos:
+  - {fileID: 1449568805}
+  - {fileID: 1397952872}
+  destruir: 0
+  alDesaparecer:
     m_PersistentCalls:
       m_Calls: []
 --- !u!1 &951546850
@@ -46921,7 +46942,6 @@ GameObject:
   - component: {fileID: 1548530508}
   - component: {fileID: 1548530507}
   - component: {fileID: 1548530510}
-  - component: {fileID: 1548530511}
   m_Layer: 0
   m_Name: CenterEyeAnchor
   m_TagString: MainCamera
@@ -47047,22 +47067,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &1548530511
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1548530506}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: df8e1d778abf442e4bec449c360e9e1c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Oculus.VR::OVRScreenFade
-  fadeTime: 2
-  fadeColor: {r: 0.01, g: 0.01, b: 0.01, a: 1}
-  fadeOnStart: 0
-  renderQueue: 5000
 --- !u!1 &1551586364
 GameObject:
   m_ObjectHideFlags: 0
