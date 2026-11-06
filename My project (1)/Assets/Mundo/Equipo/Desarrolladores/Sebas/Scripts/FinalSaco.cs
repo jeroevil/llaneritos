@@ -48,12 +48,28 @@ public class FinalSaco : MonoBehaviour
     [Tooltip("Segundos que tarda en ir del inicio al fin.")]
     [SerializeField, Min(0.1f)] float duracionRecorrido = 5f;
 
+    [Header("Niebla que consume al Silbon")]
+    [Tooltip("Mientras el Silbon se aleja, la niebla del mundo se cierra hasta tragarselo por completo.")]
+    [SerializeField] bool nieblaConsume = true;
+    [Tooltip("Cuanta niebla hay sobre el Silbon al terminar el recorrido (1 = ya no se ve).")]
+    [SerializeField, Range(0.5f, 1f)] float nieblaFinal = 1f;
+    [Tooltip("Forma de la curva: >1 = al principio se ve casi limpio y se traga al final; 1 = progresivo.")]
+    [SerializeField, Range(0.5f, 3f)] float curvaNiebla = 1.4f;
+    [Tooltip("Metros a los que empieza la niebla cuando ya es total (cerca de la camara).")]
+    [SerializeField, Min(0f)] float nieblaInicioCerrada = 3f;
+
     [Header("Fundidos")]
     // Usa el parpadeo del Silbon (FundidoParpadeo): no hay que asignar nada.
     [SerializeField, Min(0f)] float duracionFundidoEntrada = 0.6f;
     [SerializeField, Min(0f)] float tiempoEnNegro = 0.5f;
     [SerializeField, Min(0f)] float duracionFundidoApertura = 0.8f;
     [SerializeField, Min(0f)] float duracionFundidoFinal = 1.2f;
+
+    [Header("Texto y audio del final malvado")]
+    [Tooltip("Opcional. El audio empieza al abrir los ojos (durante el recorrido) y el texto aparece al terminar el recorrido, antes de cerrar.")]
+    [SerializeField] TextosFinal textosFinal;
+    [Tooltip("Segundos del fundido para abrir y cerrar los ojos alrededor del texto final.")]
+    [SerializeField, Min(0f)] float duracionFundidoTexto = 0.8f;
 
     [Header("Cierre")]
     [Tooltip("Cerrar el juego al terminar (en el editor detiene el Play).")]
@@ -84,8 +100,9 @@ public class FinalSaco : MonoBehaviour
     [ContextMenu("Empezar final (prueba)")]
     public void EmpezarFinal()
     {
-        if (enCurso) return;
+        if (enCurso || TextosFinal.AlgunoEnCurso || TextosFinal.IntroEnCurso) return;
         enCurso = true;
+        if (textosFinal != null) textosFinal.Empezar();
         StartCoroutine(RutinaFinal());
     }
 
@@ -138,7 +155,10 @@ public class FinalSaco : MonoBehaviour
         // 3. Abrir los ojos mientras empieza a caminar
         float t = 0f;
         bool hayRecorrido = saco != null && inicioRecorrido != null && finRecorrido != null;
+        bool usarNiebla = nieblaConsume && hayRecorrido && cabeza != null && RenderSettings.fog && RenderSettings.fogMode == FogMode.Linear;
+        float nieblaIni0 = RenderSettings.fogStartDistance, nieblaFin0 = RenderSettings.fogEndDistance;
         StartCoroutine(Fundir(1f, 0f, duracionFundidoApertura));
+        if (textosFinal != null) textosFinal.ReproducirAudio();
 
         // 4. Camina en linea recta hacia la oscuridad
         while (t < duracionRecorrido)
@@ -147,6 +167,8 @@ public class FinalSaco : MonoBehaviour
             if (hayRecorrido)
                 saco.transform.position = Vector3.Lerp(inicioRecorrido.position, finRecorrido.position, t / duracionRecorrido);
 
+            if (usarNiebla) AplicarNieblaSobreSilbon(Mathf.Clamp01(t / duracionRecorrido), nieblaIni0, nieblaFin0);
+
             // Fundido final solapado con el ultimo tramo del recorrido
             if (t >= duracionRecorrido - duracionFundidoFinal)
                 FundidoParpadeo.Poner(Mathf.InverseLerp(duracionRecorrido - duracionFundidoFinal, duracionRecorrido, t));
@@ -154,10 +176,40 @@ public class FinalSaco : MonoBehaviour
         }
         FundidoParpadeo.Poner(1f);
 
+        // 5. Texto final malvado: a oscuras se coloca frente al jugador, se abren los ojos,
+        //    se queda hasta que termine el audio del narrador y se vuelve a negro.
+        if (textosFinal != null)
+        {
+            textosFinal.ColocarFrenteAlJugador();
+            yield return Fundir(1f, 0f, duracionFundidoTexto);
+            yield return textosFinal.MostrarTextos();
+            yield return textosFinal.EsperarAudio();
+            yield return Fundir(0f, 1f, duracionFundidoTexto);
+        }
+
         alTerminarFinal.Invoke();
         Debug.Log("[FinalSaco] Fin del recorrido.", this);
 
         if (cerrarAlTerminar) Cerrar();
+    }
+
+    /// <summary>
+    /// Ajusta la niebla lineal para que el Silbon (a su distancia actual de la camara) quede con una fraccion de niebla
+    /// que crece de lo que ya tenia hasta nieblaFinal. Asi se va disolviendo en el fondo conforme se aleja.
+    /// </summary>
+    void AplicarNieblaSobreSilbon(float p, float inicio0, float fin0)
+    {
+        float d = Vector3.Distance(cabeza.position, saco.transform.position + Vector3.up);
+        float inicio = Mathf.Lerp(inicio0, Mathf.Min(inicio0, nieblaInicioCerrada), p);
+        inicio = Mathf.Min(inicio, d * 0.8f);
+
+        float f0 = Mathf.Clamp01((d - inicio0) / Mathf.Max(0.01f, fin0 - inicio0));
+        float f = Mathf.Lerp(f0, nieblaFinal, Mathf.Pow(p, curvaNiebla));
+        if (f <= 0.001f) return;
+
+        float fin = inicio + (d - inicio) / f;
+        RenderSettings.fogStartDistance = inicio;
+        RenderSettings.fogEndDistance = Mathf.Min(fin, fin0);
     }
 
     /// <summary>Lleva al jugador al punto de vista (a oscuras): cabeza sobre el punto y mirando hacia su forward.</summary>

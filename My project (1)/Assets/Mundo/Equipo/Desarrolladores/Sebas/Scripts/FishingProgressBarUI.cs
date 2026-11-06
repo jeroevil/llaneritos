@@ -130,6 +130,13 @@ public class FishingProgressBarUI : MonoBehaviour
     public Transform camaraJugador;
 
     // Estados internos de interpolación
+    [Header("Peces de relleno (bagre amarillo, curito)")]
+    [Tooltip("Los peces que no cuentan adelantan la barra, pero se detienen esta fraccion de pez ANTES de la siguiente raya " +
+             "(las rayas son los hitos de la red y el final). Solo las cachamas reales cruzan la raya.")]
+    [SerializeField, Min(0f)] float margenAntesDelHito = 0.15f;
+
+    private float _ultimoBono = 0f;
+    private float _barraVisual = 0f;   // peces que muestra la barra (puede ir por delante de los reales por el relleno)
     private int _ultimoPeces = -1;
     private float _fillActual = 0f;
     private float _fillVelocidad = 0f;
@@ -207,18 +214,50 @@ public class FishingProgressBarUI : MonoBehaviour
         if (director == null) return;
 
         int pecesActuales = director.currentFishCount;
-        float fillObjetivo = FillParaPeces(pecesActuales);
 
-        // Si entró un nuevo pez, disparar pop/rebote
-        if (_ultimoPeces >= 0 && pecesActuales > _ultimoPeces)
+        // Si entró un nuevo pez (de los que cuentan o de relleno), disparar pop/rebote
+        bool entroPezReal = _ultimoPeces >= 0 && pecesActuales > _ultimoPeces;
+        bool entroPezRelleno = director.bonoPlacebo > _ultimoBono + 0.0001f;
+
+        // Valor que muestra la barra: solo avanza. El relleno la adelanta (con tope antes de la siguiente raya)
+        // y los peces reales la alcanzan sin saltos. Si se reinicia la pesca, vuelve a los peces reales.
+        bool reinicio = (_ultimoPeces >= 0 && pecesActuales < _ultimoPeces) || director.bonoPlacebo < _ultimoBono - 0.0001f;
+        if (reinicio) _barraVisual = pecesActuales;
+        float tope = TopeVisual(pecesActuales);
+        if (entroPezRelleno) _barraVisual = Mathf.Min(_barraVisual + (director.bonoPlacebo - _ultimoBono), tope);
+        _barraVisual = Mathf.Clamp(Mathf.Max(_barraVisual, pecesActuales), pecesActuales, tope);
+
+        float fillObjetivo = FillParaPeces(_barraVisual);
+
+        if (entroPezReal || entroPezRelleno)
         {
             DispararImpactoPez();
         }
         _ultimoPeces = pecesActuales;
+        _ultimoBono = director.bonoPlacebo;
 
         // Deslizamiento suave
         _fillActual = Mathf.SmoothDamp(_fillActual, fillObjetivo, ref _fillVelocidad, duracionSuavizado);
         ActualizarFillEnRellenos(_fillActual);
+    }
+
+    /// <summary>
+    /// Peces que muestra la barra: los reales (cachamas) mas el bono de los peces de relleno, sin pasar la siguiente raya.
+    /// Asi el relleno da sensacion de avance, pero solo las cachamas cruzan los hitos (mejora de la red, Silbon, final).
+    /// </summary>
+    public float PecesVisuales()
+    {
+        if (director == null) return 0f;
+        return Mathf.Max(_barraVisual, director.currentFishCount);
+    }
+
+    /// <summary>Hasta donde puede llegar la barra con relleno: justo antes de la siguiente raya (hito de la red o final).</summary>
+    private float TopeVisual(int reales)
+    {
+        int total = Mathf.Max(1, director.totalFishNeeded);
+        if (reales >= total) return reales;
+        int siguienteRaya = reales < Hito1 ? Hito1 : (reales < Hito2 ? Hito2 : total);
+        return Mathf.Max(reales, siguienteRaya - margenAntesDelHito);
     }
 
     public int Hito1

@@ -76,6 +76,9 @@ public class IntroMoricheTelon : MonoBehaviour
 
     // Estado interno
     private bool _introEnProgreso = true;
+
+    /// <summary>True mientras la intro (video tutorial, logo y telon) sigue en curso.</summary>
+    public bool IntroEnProgreso => _introEnProgreso;
     private PinchToWalk _pinchToWalk;
     private SpriteRenderer[] _sprites;
     private Image[] _uiImages;

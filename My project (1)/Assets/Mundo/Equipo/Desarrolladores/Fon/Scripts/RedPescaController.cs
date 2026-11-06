@@ -95,9 +95,22 @@ public class RedPescaController : MonoBehaviour
     [Tooltip("Grados máximos que se inclina la red hacia donde la jalan.")]
     [SerializeField] float inclinacionMaxima = 25f;
 
+    [System.Serializable]
+    public class TipoDePezEnRed
+    {
+        [Tooltip("Prefab del pez fisico (con TipoPez y un hijo 'Modelo').")]
+        public GameObject prefab;
+        [Tooltip("Probabilidad relativa de que la red lo traiga (las cachamas deben pesar mas para que el avance no se frustre).")]
+        [Min(0f)] public float peso = 1f;
+    }
+
     [Header("Peces")]
     [Tooltip("Prefab del pez físico que aparece en la mesa.")]
     [SerializeField] GameObject prefabPez;
+    [Tooltip("Tipos de pez que puede traer la red (cachama, bagre amarillo, curito...). Si esta vacio se usa solo 'Prefab Pez'.")]
+    [SerializeField] List<TipoDePezEnRed> tiposDePez = new List<TipoDePezEnRed>();
+    [Tooltip("En cada lance al menos un pez es de los que cuentan (cachama). Sin esto, un lance podria traer solo peces de relleno.")]
+    [SerializeField] bool garantizarUnaCachamaPorLance = true;
     [SerializeField] int pecesMinimos = 1;
     [SerializeField] int pecesMaximos = 3;
     [Tooltip("Tope de peces que caben en la red si se lanza varias veces sin vaciarla.")]
@@ -697,56 +710,127 @@ public class RedPescaController : MonoBehaviour
     void SoltarPecesEnMesa(Vector3 centro)
     {
         int cantidad = PecesAtrapados;
+        var elegidos = new List<GameObject>(prefabsEnRed); // el tipo de cada pez que traia la red
         VaciarRed();
-        if (prefabPez == null) return;
+        if (prefabPez == null && elegidos.Count == 0) return;
 
         float radio = limitesAbierta.extents.x * escalaEnMesa * 0.4f;
         for (int i = 0; i < cantidad; i++)
         {
+            GameObject pf = (i < elegidos.Count && elegidos[i] != null) ? elegidos[i] : prefabPez;
+            if (pf == null) continue;
             Vector3 p = centro + new Vector3(Random.Range(-radio, radio) * 0.5f, 0.12f + i * 0.08f, Random.Range(-radio, radio));
-            Quaternion r = Quaternion.Euler(0f, Random.Range(-20f, 20f), 0f) * prefabPez.transform.rotation;
-            pecesEnMesa.Add(Instantiate(prefabPez, p, r));
+            Quaternion r = Quaternion.Euler(0f, Random.Range(-20f, 20f), 0f) * pf.transform.rotation;
+            pecesEnMesa.Add(Instantiate(pf, p, r));
         }
     }
 
     // =========================================================================
     // PECES DENTRO DE LA RED (solo visuales)
     // =========================================================================
+    // Tipo (prefab) de cada pez que lleva la red, en el mismo orden en que se atraparon
+    readonly List<GameObject> prefabsEnRed = new List<GameObject>();
+
     int AgregarPeces(int cantidad)
     {
         int antes = PecesAtrapados;
         PecesAtrapados = Mathf.Min(PecesAtrapados + cantidad, pecesTope);
+        int nuevos = PecesAtrapados - antes;
 
-        var sprite = prefabPez != null ? prefabPez.GetComponentInChildren<SpriteRenderer>() : null;
-        if (sprite != null)
+        var elegidos = ElegirTipos(nuevos);
+        prefabsEnRed.AddRange(elegidos);
+
+        foreach (var pf in elegidos)
         {
-            Vector3 escalaMundo = Vector3.Scale(prefabPez.transform.localScale, sprite.transform.localScale) * escalaPezEnRed;
-            for (int i = antes; i < PecesAtrapados; i++)
-            {
-                var visual = new GameObject("Pez en red");
-                visual.transform.SetParent(transform, false);
-                var sr = visual.AddComponent<SpriteRenderer>();
-                sr.sprite = sprite.sprite;
-                sr.sharedMaterial = sprite.sharedMaterial;
-                sr.color = sprite.color;
-
-                // Colgando dentro de la red, cabeza abajo
-                Vector3 c = limitesCerrada.center;
-                visual.transform.localPosition = new Vector3(c.x + Random.Range(-0.08f, 0.08f),
-                    limitesCerrada.min.y + 0.35f + Random.Range(0f, 0.25f), c.z + Random.Range(-0.08f, 0.08f));
-                visual.transform.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Quaternion.Euler(0f, 0f, 90f) * Quaternion.Euler(270f, 0f, 0f);
-                visual.transform.localScale = escalaMundo;
-                pecesEnRed.Add(visual);
-            }
+            var visual = CrearVisualEnRed(pf);
+            if (visual != null) pecesEnRed.Add(visual);
         }
         ActualizarPecesVisibles();
-        return PecesAtrapados - antes;
+        return nuevos;
+    }
+
+    /// <summary>Decide el tipo de cada pez nuevo (por peso) y garantiza al menos una cachama por lance si esta activado.</summary>
+    List<GameObject> ElegirTipos(int cantidad)
+    {
+        var res = new List<GameObject>();
+        bool hayTipos = false;
+        foreach (var t in tiposDePez) if (t != null && t.prefab != null && t.peso > 0f) hayTipos = true;
+
+        for (int i = 0; i < cantidad; i++) res.Add(hayTipos ? ElegirPrefabPonderado() : prefabPez);
+
+        if (hayTipos && garantizarUnaCachamaPorLance && cantidad > 0 && !res.Exists(CuentaParaProgreso))
+        {
+            foreach (var t in tiposDePez)
+                if (t != null && t.prefab != null && t.peso > 0f && CuentaParaProgreso(t.prefab)) { res[0] = t.prefab; break; }
+        }
+        return res;
+    }
+
+    GameObject ElegirPrefabPonderado()
+    {
+        float suma = 0f;
+        foreach (var t in tiposDePez) if (t != null && t.prefab != null) suma += Mathf.Max(0f, t.peso);
+        float tirada = Random.value * suma;
+        foreach (var t in tiposDePez)
+        {
+            if (t == null || t.prefab == null) continue;
+            tirada -= Mathf.Max(0f, t.peso);
+            if (tirada <= 0f) return t.prefab;
+        }
+        foreach (var t in tiposDePez) if (t != null && t.prefab != null) return t.prefab;
+        return prefabPez;
+    }
+
+    static bool CuentaParaProgreso(GameObject prefab)
+    {
+        if (prefab == null) return false;
+        var tipo = prefab.GetComponent<TipoPez>();
+        return tipo == null || tipo.CuentaParaProgreso;
+    }
+
+    /// <summary>Pez colgando dentro de la red, cabeza abajo: un clon del hijo 'Modelo' del prefab (3D) o, si no tiene, su sprite.</summary>
+    GameObject CrearVisualEnRed(GameObject pf)
+    {
+        if (pf == null) return null;
+
+        Vector3 c = limitesCerrada.center;
+        Vector3 pos = new Vector3(c.x + Random.Range(-0.08f, 0.08f),
+            limitesCerrada.min.y + 0.35f + Random.Range(0f, 0.25f), c.z + Random.Range(-0.08f, 0.08f));
+
+        var modelo = pf.transform.Find("Modelo");
+        if (modelo != null)
+        {
+            var v = Instantiate(modelo.gameObject, transform);
+            v.name = "Pez en red";
+            v.SetActive(true);
+            foreach (var col in v.GetComponentsInChildren<Collider>()) Destroy(col);
+            foreach (var rb in v.GetComponentsInChildren<Rigidbody>()) Destroy(rb);
+            v.transform.localPosition = pos;
+            // La cabeza del modelo mira a -X: girar 90 grados en Z la deja apuntando hacia abajo
+            v.transform.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Quaternion.Euler(0f, 0f, 90f) * modelo.localRotation;
+            v.transform.localScale = Vector3.Scale(pf.transform.localScale, modelo.localScale) * escalaPezEnRed;
+            return v;
+        }
+
+        var sprite = pf.GetComponentInChildren<SpriteRenderer>();
+        if (sprite == null) return null;
+        var visual = new GameObject("Pez en red");
+        visual.transform.SetParent(transform, false);
+        var sr = visual.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite.sprite;
+        sr.sharedMaterial = sprite.sharedMaterial;
+        sr.color = sprite.color;
+        visual.transform.localPosition = pos;
+        visual.transform.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Quaternion.Euler(0f, 0f, 90f) * Quaternion.Euler(270f, 0f, 0f);
+        visual.transform.localScale = Vector3.Scale(pf.transform.localScale, sprite.transform.localScale) * escalaPezEnRed;
+        return visual;
     }
 
     void VaciarRed()
     {
         foreach (var v in pecesEnRed) if (v != null) Destroy(v);
         pecesEnRed.Clear();
+        prefabsEnRed.Clear();
         PecesAtrapados = 0;
     }
 

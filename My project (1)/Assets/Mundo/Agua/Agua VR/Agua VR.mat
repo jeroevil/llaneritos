@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Agua VR
+  m_Shader: {fileID: 4800000, guid: 0dc7ccd2391c40947a01e42a480ab04b, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _NormalMap:
+        m_Texture: {fileID: 2800000, guid: 9caa5ab94a3df524c81a79989af43df9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _DistanciaOlas: 160
+    - _EscalaOlas: 7
+    - _FresnelPotencia: 4.5
+    - _FuerzaOlas: 0.55
+    - _Opacidad: 0.92
+    - _ReflejoMinimo: 0.05
+    - _SolDureza: 70
+    - _SolIntensidad: 1.4
+    - _VelocidadOlas: 0.035
+    m_Colors:
+    - _ColorHorizonte: {r: 0.47699985, g: 0.2956998, b: 0.14731899, a: 1}
+    - _ColorMedio: {r: 0.34239164, g: 0.27383846, b: 0.21404114, a: 1}
+    - _ColorProfundo: {r: 0.0023219814, g: 0.013411746, b: 0.027211785, a: 1}
+    - _ColorSuperficial: {r: 0.008540383, g: 0.07323897, b: 0.08353512, a: 1}
+    - _ColorZenit: {r: 0.1399849, g: 0.26327342, b: 0.5704816, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

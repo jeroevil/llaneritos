@@ -56,6 +56,10 @@ public class DialogueController : MonoBehaviour
     [Tooltip("Opcional: Componente AparicionPorPeces con el que sincronizar la activacion automatica. Si esta vacio y 'iniciarDesactivado' esta activo, se buscara solo.")]
     public AparicionPorPeces sincronizarConAparicion;
 
+    [Tooltip("Si esta activo, NO se busca ningun AparicionPorPeces: el dialogo solo arranca cuando alguien llama a ActivarDialogos() " +
+             "(por ejemplo ActivarDialogoPorCercania al acercarte al personaje).")]
+    public bool soloActivacionManual = false;
+
     [Header("Pruebas en Editor (PC)")]
     [Tooltip("Permite presionar Flecha Derecha / D para avanzar y Flecha Izquierda / A para retroceder")]
     public bool habilitarTeclasDebug = true;
@@ -63,6 +67,11 @@ public class DialogueController : MonoBehaviour
     public int IndiceActual { get; private set; } = 0;
     public bool DialogosCompletados { get; private set; } = false;
     public bool EsperandoActivacion => _esperandoActivacion;
+
+    /// <summary>True mientras la conversacion se esta mostrando (ya arranco y todavia no termina).</summary>
+    public bool EnCurso => !_esperandoActivacion && !DialogosCompletados && gameObject.activeInHierarchy && _arranco;
+
+    private bool _arranco = false;
 
     private bool _esperandoActivacion = false;
 
@@ -87,7 +96,7 @@ public class DialogueController : MonoBehaviour
             OcultarTodosLosDialogosYFlechas();
 
             // Buscar automaticamente si hay un AparicionPorPeces vinculado
-            if (sincronizarConAparicion == null)
+            if (sincronizarConAparicion == null && !soloActivacionManual)
             {
                 var apariciones = FindObjectsByType<AparicionPorPeces>(FindObjectsSortMode.None);
                 foreach (var ap in apariciones)
@@ -127,6 +136,7 @@ public class DialogueController : MonoBehaviour
         }
         else
         {
+            _arranco = true;
             MostrarDialogo(0);
         }
     }
@@ -342,7 +352,10 @@ public class DialogueController : MonoBehaviour
     {
         _esperandoActivacion = false;
         DialogosCompletados = false;
+        _arranco = true;
         gameObject.SetActive(true);
+        // Awake/Ocultar dejo la flecha Siguiente apagada: se enciende junto con el primer dialogo
+        if (flechaSiguiente != null) flechaSiguiente.gameObject.SetActive(true);
         MostrarDialogo(0);
         Debug.Log($"[Dialogo] '{name}' activado e iniciado en dialogo 1.", this);
     }

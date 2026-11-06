@@ -179,6 +179,17 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("Cantidad actual de peces depositados en el barril")]
     public int currentFishCount = 0;
 
+    [Header("Peces que no cuentan (efecto placebo en la barra)")]
+    [Tooltip("Unidades de barra acumuladas por peces que NO son cachama (bagre, curito). Solo las lee la barra de progreso: " +
+             "no mueven fases, Silbon, mejora de la red ni persecucion.")]
+    public float bonoPlacebo = 0f;
+
+    [Tooltip("Cuantos peces de relleno (que no cuentan) se han depositado.")]
+    public int pecesPlaceboDepositados = 0;
+
+    [Tooltip("Se dispara al depositar un pez que no cuenta (pasa las unidades que suma a la barra).")]
+    public UnityEvent<float> OnPlaceboAgregado;
+
     [Header("Comportamiento de la Timeline")]
     [Tooltip("Segundo de la Timeline donde termina la fase de acecho y arranca la persecucion")]
     public float chaseStartSecond = 10f;
@@ -578,6 +589,25 @@ public class FishingSilbonDirector : MonoBehaviour
             audioManager.PlayPezPoint();
 
         ApplyProgress(progress);
+    }
+
+    /// <summary>
+    /// Pez que NO cuenta (bagre amarillo, curito): solo adelanta la barra de progreso (placebo).
+    /// No toca currentFishCount, asi que no cambia fases, Silbon, mejora de la red ni persecucion.
+    /// </summary>
+    public void AddPlacebo(float unidades)
+    {
+        if (_chaseTriggered) return;
+
+        bonoPlacebo = Mathf.Clamp(bonoPlacebo + Mathf.Max(0f, unidades), 0f, totalFishNeeded);
+        pecesPlaceboDepositados++;
+
+        Debug.Log($"[Pesca] Pez de relleno depositado (+{unidades:F2} a la barra, bono total {bonoPlacebo:F2}). No cuenta: pecesReales={currentFishCount}/{totalFishNeeded}.");
+
+        if (audioManager != null)
+            audioManager.PlayPezPoint();
+
+        OnPlaceboAgregado?.Invoke(unidades);
     }
 
     private void CalcularPesoTerror(int pecesActuales)
@@ -1315,6 +1345,8 @@ public class FishingSilbonDirector : MonoBehaviour
     public void ResetProgress()
     {
         currentFishCount = 0;
+        bonoPlacebo = 0f;
+        pecesPlaceboDepositados = 0;
         _chaseTriggered = false;
         _currentPhase = 1;
         _targetTerrorWeight = 0f;

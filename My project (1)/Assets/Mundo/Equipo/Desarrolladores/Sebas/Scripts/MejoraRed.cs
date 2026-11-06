@@ -53,11 +53,22 @@ public class MejoraRed : MonoBehaviour
     [SerializeField] GameObject objetoBotonFinalizar;
     // El fundido usa el parpadeo del Silbon (FundidoParpadeo): no hay que asignar nada.
     [SerializeField, Min(0f)] float duracionFundidoFinal = 1f;
+    [Tooltip("Opcional. Final bueno: tras el fundido se abren los ojos, se muestran estos textos frente al jugador y luego se cierra.")]
+    [SerializeField] TextosFinal textosFinal;
+    [Tooltip("Segundos del fundido para abrir los ojos antes de los textos del final bueno.")]
+    [SerializeField, Min(0f)] float duracionFundidoTexto = 0.8f;
 
     [Header("Teletransporte a la decision")]
     [Tooltip("Boton de teletransporte cuyo destino es 'teletransporte decicion hermanos' (la Cuarta flecha). " +
              "Al aparecer la mejora lleva ahi al jugador; al presionar Continuar lo regresa a donde estaba. Vacio = no se teletransporta.")]
     [SerializeField] PuntoTeletransporte puntoDecision;
+
+    [Header("Hermanos en la decision")]
+    [Tooltip("Animators de los hermanos que esperan junto a la decision (los 'dialogos de mejorar red'). " +
+             "Cuando se desbloquea la mejora pasan a su animacion de hablar (bool del controller) y vuelven a reposo al decidir.")]
+    [SerializeField] List<Animator> hermanosDecision = new List<Animator>();
+    [Tooltip("Nombre del parametro bool de sus controllers (Hermano y Hermana) que activa la animacion de hablar.")]
+    [SerializeField] string parametroHablando = "Hablando";
 
     [Header("Objetos que desaparecen")]
     [Tooltip("Se apagan la primera vez que aparece el boton de mejora (el pez del nivel 1, por defecto el tercero), " +
@@ -129,6 +140,7 @@ public class MejoraRed : MonoBehaviour
     void Update()
     {
         LeerTeclasDebug();
+        if (hermanosHablando) AplicarHablando();
         if (director == null) return;
 
         // Mostrar el boton solo cuando el siguiente nivel ya se alcanzo con los peces
@@ -139,6 +151,7 @@ public class MejoraRed : MonoBehaviour
         if (disponible != HayMejoraDisponible)
         {
             HayMejoraDisponible = disponible;
+            PonerHermanosHablando(disponible);
             if (objetoBoton != null) objetoBoton.SetActive(disponible);
             if (disponible)
             {
@@ -172,10 +185,42 @@ public class MejoraRed : MonoBehaviour
 
         mejoraPendiente = true;
         HayMejoraDisponible = false;
+        PonerHermanosHablando(false);
         if (puntoDecision != null) puntoDecision.VolverAlOrigen();
         if (objetoBoton != null) objetoBoton.SetActive(false);
         ActualizarBotonFinalizar(false);
         Debug.Log($"[MejoraRed] Mejora al nivel {NivelActual + 1} solicitada" + (RedEnReposo() ? "." : " (se aplica cuando la red vuelva a la orilla)."), this);
+    }
+
+    bool hermanosHablando;
+
+    /// <summary>Pide que los hermanos de la decision hablen (o dejen de hablar). Se aplica en cuanto estan activos.</summary>
+    void PonerHermanosHablando(bool hablando)
+    {
+        hermanosHablando = hablando;
+        AplicarHablando();
+    }
+
+    /// <summary>
+    /// Los hermanos de la decision pueden estar ocultos cuando se desbloquea la mejora (aparecen con el dialogo):
+    /// un Animator inactivo no recibe parametros, asi que se reintenta cada cuadro hasta que quedan como se pidio.
+    /// </summary>
+    void AplicarHablando()
+    {
+        if (string.IsNullOrEmpty(parametroHablando)) return;
+        foreach (var a in hermanosDecision)
+        {
+            if (a == null || !a.isActiveAndEnabled || a.runtimeAnimatorController == null) continue;
+            if (!TieneBool(a, parametroHablando)) continue;
+            if (a.GetBool(parametroHablando) != hermanosHablando) a.SetBool(parametroHablando, hermanosHablando);
+        }
+    }
+
+    static bool TieneBool(Animator a, string nombre)
+    {
+        foreach (var p in a.parameters)
+            if (p.name == nombre && p.type == AnimatorControllerParameterType.Bool) return true;
+        return false;
     }
 
     void OcultarObjetos()
@@ -198,9 +243,11 @@ public class MejoraRed : MonoBehaviour
     [ContextMenu("Finalizar (prueba)")]
     public void Finalizar()
     {
-        if (finalizando) return;
+        if (finalizando || TextosFinal.AlgunoEnCurso || TextosFinal.IntroEnCurso) return;
         finalizando = true;
+        if (textosFinal != null) textosFinal.Empezar();
         HayMejoraDisponible = false;
+        PonerHermanosHablando(false);
         if (objetoBoton != null) objetoBoton.SetActive(false);
         ActualizarBotonFinalizar(false);
         StartCoroutine(RutinaFinalizar());
@@ -212,6 +259,18 @@ public class MejoraRed : MonoBehaviour
         alFinalizar.Invoke();
 
         yield return FundidoParpadeo.Fundir(0f, 1f, duracionFundidoFinal);
+
+        // Final bueno: a oscuras se colocan los textos frente al jugador, se abren los ojos,
+        // se muestran uno tras otro y se vuelve a negro antes de cerrar.
+        if (textosFinal != null)
+        {
+            textosFinal.ColocarFrenteAlJugador();
+            textosFinal.ReproducirAudio();
+            yield return FundidoParpadeo.Fundir(1f, 0f, duracionFundidoTexto);
+            yield return textosFinal.MostrarTextos();
+            yield return textosFinal.EsperarAudio();
+            yield return FundidoParpadeo.Fundir(0f, 1f, duracionFundidoFinal);
+        }
 
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;

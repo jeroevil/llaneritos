@@ -3,6 +3,9 @@
 /// <summary>
 /// Colocar en el barril con un Collider marcado como IsTrigger.
 /// Detecta cuando un pez cae adentro y notifica al FishingSilbonDirector.
+///
+/// Si el pez tiene TipoPez y no cuenta para el progreso (bagre amarillo, curito), solo mueve la barra (placebo).
+/// Un pez sin TipoPez cuenta como cachama (comportamiento de siempre).
 /// </summary>
 public class FishBarrelTrigger : MonoBehaviour
 {
@@ -25,11 +28,20 @@ public class FishBarrelTrigger : MonoBehaviour
         {
             if (progressionDirector != null)
             {
-                progressionDirector.AddFish(1);
+                var tipo = other.GetComponentInParent<TipoPez>();
+                if (tipo == null || tipo.CuentaParaProgreso)
+                {
+                    progressionDirector.AddFish(1);
+                }
+                else
+                {
+                    progressionDirector.AddPlacebo(tipo.AporteBarra);
+                    Debug.Log($"[Pesca] {tipo.TipoDePez} depositado: no cuenta para el Silbon ni la red, solo mueve la barra (+{tipo.AporteBarra:F2}).");
+                }
             }
 
             // Desactivar o destruir el pez depositado en el barril
-            Destroy(other.gameObject);
+            Destroy(other.attachedRigidbody != null ? other.attachedRigidbody.gameObject : other.gameObject);
         }
     }
 }
