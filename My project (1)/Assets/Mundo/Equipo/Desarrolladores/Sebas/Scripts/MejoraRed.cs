@@ -70,6 +70,18 @@ public class MejoraRed : MonoBehaviour
     [Tooltip("Nombre del parametro bool de sus controllers (Hermano y Hermana) que activa la animacion de hablar.")]
     [SerializeField] string parametroHablando = "Hablando";
 
+    [System.Serializable]
+    public class HablantesMejora
+    {
+        [Tooltip("Quienes hablan (animacion) cuando esta disponible esta mejora.")]
+        public List<Animator> hablan = new List<Animator>();
+    }
+
+    [Tooltip("Quien habla en cada mejora: elemento 0 = primera mejora, elemento 1 = segunda... " +
+             "Los hermanos de la lista de arriba que no esten en la mejora actual se quedan en reposo. " +
+             "Si la lista esta vacia (o no hay elemento para la mejora), hablan todos.")]
+    [SerializeField] List<HablantesMejora> hablanPorMejora = new List<HablantesMejora>();
+
     [Header("Objetos que desaparecen")]
     [Tooltip("Se apagan la primera vez que aparece el boton de mejora (el pez del nivel 1, por defecto el tercero), " +
              "justo cuando aparecen los botones Continuar y Finalizar.")]
@@ -208,11 +220,17 @@ public class MejoraRed : MonoBehaviour
     void AplicarHablando()
     {
         if (string.IsNullOrEmpty(parametroHablando)) return;
+        List<Animator> hablantes = null;
+        if (NivelActual >= 0 && NivelActual < hablanPorMejora.Count && hablanPorMejora[NivelActual] != null
+            && hablanPorMejora[NivelActual].hablan.Count > 0)
+            hablantes = hablanPorMejora[NivelActual].hablan;
+
         foreach (var a in hermanosDecision)
         {
             if (a == null || !a.isActiveAndEnabled || a.runtimeAnimatorController == null) continue;
             if (!TieneBool(a, parametroHablando)) continue;
-            if (a.GetBool(parametroHablando) != hermanosHablando) a.SetBool(parametroHablando, hermanosHablando);
+            bool debeHablar = hermanosHablando && (hablantes == null || hablantes.Contains(a));
+            if (a.GetBool(parametroHablando) != debeHablar) a.SetBool(parametroHablando, debeHablar);
         }
     }
 
