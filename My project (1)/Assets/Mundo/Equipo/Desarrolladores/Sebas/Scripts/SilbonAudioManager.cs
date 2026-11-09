@@ -48,6 +48,16 @@ public class SilbonAudioManager : MonoBehaviour
     [Tooltip("Velocidad de transición del crossfade de ambiente")]
     public float velocidadCrossfade = 1.5f;
 
+    [Header("Volumen del Silbido segun Distancia (INVERSO)")]
+    [Tooltip("Si esta activo: cuanto mas CERCA esta el Silbon, mas BAJO suena el silbido; cuanto mas LEJOS, mas fuerte (al reves que lo normal).")]
+    public bool silbidoMasFuerteLejos = true;
+    [Tooltip("A esta distancia o menos el silbido suena al volumen minimo.")]
+    [Min(0f)] public float distanciaSilbidoCerca = 6f;
+    [Tooltip("A esta distancia o mas el silbido suena a todo volumen.")]
+    [Min(1f)] public float distanciaSilbidoLejos = 45f;
+    [Tooltip("Fraccion del volumen (0-1) cuando el Silbon esta pegado a ti. 0 = silencio total.")]
+    [Range(0f, 1f)] public float volumenSilbidoCerca = 0.1f;
+
     [Header("Duracion y Fade Out del Silbato")]
     [Tooltip("Duracion maxima del silbido en segundos para que no se alargue demasiado")]
     [Range(1.0f, 6.0f)] public float duracionMaximaSilbido = 2.8f;
@@ -69,6 +79,8 @@ public class SilbonAudioManager : MonoBehaviour
     private AudioSource _sourceSFX2D;
     private AudioSource _sourceSilbon3D;
     private Coroutine _rutinaFadeSilbato;
+    private float _gananciaFadeSilbato = 1f; // 0..1, la mueven los fades
+    private AudioListener _listener;
 
     // Estado interno
     private float _nivelTerrorObjetivo = 0f;
@@ -125,7 +137,17 @@ public class SilbonAudioManager : MonoBehaviour
         // 5. Fuente 3D para el Silbón (Silbido posicional en VR)
         _sourceSilbon3D = CrearAudioSource("AudioSource_Silbon_3D", espacialidadSilbato, false);
         _sourceSilbon3D.volume = 1f; // ¡CRÍTICO! Debe ser 1f para que el silbido suene a volumen completo
-        _sourceSilbon3D.rolloffMode = AudioRolloffMode.Linear;
+        if (silbidoMasFuerteLejos)
+        {
+            // Sin atenuacion nativa por distancia: el volumen lo controla FactorDistanciaSilbido (inverso).
+            // El 3D se mantiene solo para la direccion del sonido.
+            _sourceSilbon3D.rolloffMode = AudioRolloffMode.Custom;
+            _sourceSilbon3D.SetCustomCurve(AudioSourceCurveType.CustomRolloff, AnimationCurve.Constant(0f, 1f, 1f));
+        }
+        else
+        {
+            _sourceSilbon3D.rolloffMode = AudioRolloffMode.Linear;
+        }
         _sourceSilbon3D.minDistance = distanciaMinimaSilbato3D;
         _sourceSilbon3D.maxDistance = distanciaMaximaSilbato3D;
         _sourceSilbon3D.dopplerLevel = 0f;
@@ -150,8 +172,32 @@ public class SilbonAudioManager : MonoBehaviour
         return source;
     }
 
+    /// <summary>Factor 0..1 por distancia al jugador: cerca = poco, lejos = todo (si silbidoMasFuerteLejos). Si no, 1.</summary>
+    private float FactorDistanciaSilbido()
+    {
+        if (!silbidoMasFuerteLejos || _sourceSilbon3D == null) return 1f;
+        if (_listener == null || !_listener.isActiveAndEnabled)
+            _listener = FindFirstObjectByType<AudioListener>();
+        if (_listener == null) return 1f;
+
+        float d = Vector3.Distance(_listener.transform.position, _sourceSilbon3D.transform.position);
+        float t = Mathf.InverseLerp(distanciaSilbidoCerca, Mathf.Max(distanciaSilbidoCerca + 0.1f, distanciaSilbidoLejos), d);
+        return Mathf.Lerp(volumenSilbidoCerca, 1f, t);
+    }
+
+    /// <summary>Aplica al AudioSource del silbido: volumen base x fade x factor de distancia.</summary>
+    private void AplicarVolumenSilbido()
+    {
+        if (_sourceSilbon3D == null) return;
+        _sourceSilbon3D.volume = volumenSilbato * volumenMaster * _gananciaFadeSilbato * FactorDistanciaSilbido();
+    }
+
     private void Update()
     {
+        // El silbido se actualiza siempre (tambien durante la persecucion)
+        if (_sourceSilbon3D != null && _sourceSilbon3D.isPlaying && _sourceSilbon3D.clip == clipSilbato && clipSilbato != null)
+            AplicarVolumenSilbido();
+
         if (_enPersecucion) return;
 
         // Crossfade suave entre Calma y Tensión basado en el nivel de terror
@@ -272,9 +318,9 @@ public class SilbonAudioManager : MonoBehaviour
 
     private IEnumerator RutinaReproducirSilbatoConFade(float duracionTotal, float duracionFade)
     {
-        float volBase = volumenSilbato * volumenMaster;
+        _gananciaFadeSilbato = 1f;
         _sourceSilbon3D.clip = clipSilbato;
-        _sourceSilbon3D.volume = volBase;
+        AplicarVolumenSilbido();
         _sourceSilbon3D.time = 0f;
         _sourceSilbon3D.Play();
 
@@ -289,11 +335,12 @@ public class SilbonAudioManager : MonoBehaviour
         while (t < duracionFade)
         {
             t += Time.deltaTime;
-            float factor = Mathf.Clamp01(1f - (t / duracionFade));
-            _sourceSilbon3D.volume = volBase * factor;
+            _gananciaFadeSilbato = Mathf.Clamp01(1f - (t / duracionFade));
+            AplicarVolumenSilbido();
             yield return null;
         }
 
+        _gananciaFadeSilbato = 0f;
         _sourceSilbon3D.volume = 0f;
         _sourceSilbon3D.Stop();
         _rutinaFadeSilbato = null;
@@ -315,16 +362,17 @@ public class SilbonAudioManager : MonoBehaviour
 
     private IEnumerator RutinaFadeOutInmediato(float duracionFade)
     {
-        float volInicial = _sourceSilbon3D.volume;
+        float ganInicial = _gananciaFadeSilbato;
         float t = 0f;
         while (t < duracionFade)
         {
             t += Time.deltaTime;
-            float factor = Mathf.Clamp01(1f - (t / duracionFade));
-            _sourceSilbon3D.volume = volInicial * factor;
+            _gananciaFadeSilbato = ganInicial * Mathf.Clamp01(1f - (t / duracionFade));
+            AplicarVolumenSilbido();
             yield return null;
         }
 
+        _gananciaFadeSilbato = 0f;
         _sourceSilbon3D.volume = 0f;
         _sourceSilbon3D.Stop();
         _rutinaFadeSilbato = null;

@@ -29,16 +29,19 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _AlturaArboles: 0.06
     - _DistanciaOlas: 160
     - _EscalaOlas: 7
     - _FresnelPotencia: 4.5
     - _FuerzaOlas: 0.55
     - _Opacidad: 0.92
+    - _ReflejoArboles: 0.85
     - _ReflejoMinimo: 0.05
     - _SolDureza: 70
     - _SolIntensidad: 1.4
     - _VelocidadOlas: 0.035
     m_Colors:
+    - _ColorArboles: {r: 0.13, g: 0.14, b: 0.08, a: 1}
     - _ColorHorizonte: {r: 0.47699985, g: 0.2956998, b: 0.14731899, a: 1}
     - _ColorMedio: {r: 0.34239164, g: 0.27383846, b: 0.21404114, a: 1}
     - _ColorProfundo: {r: 0.0023219814, g: 0.013411746, b: 0.027211785, a: 1}

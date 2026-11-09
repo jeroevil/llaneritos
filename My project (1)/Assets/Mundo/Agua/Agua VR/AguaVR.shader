@@ -31,6 +31,11 @@ Shader "Llaneritos/Agua VR"
         [Header(Brillo del sol)]
         _SolIntensidad ("Intensidad", Float) = 1.4
         _SolDureza ("Dureza", Float) = 70
+
+        [Header(Reflejo de la orilla con arboles)]
+        _ColorArboles ("Color del reflejo de los arboles", Color) = (0.22, 0.2, 0.1, 1)
+        _ReflejoArboles ("Fuerza (0 = sin reflejo)", Range(0, 1)) = 0
+        _AlturaArboles ("Altura de la franja (0-1)", Range(0.02, 0.5)) = 0.22
     }
 
     SubShader
@@ -72,6 +77,9 @@ Shader "Llaneritos/Agua VR"
                 half _FresnelPotencia;
                 half _SolIntensidad;
                 half _SolDureza;
+                half4 _ColorArboles;
+                half _ReflejoArboles;
+                half _AlturaArboles;
             CBUFFER_END
 
             struct Attributes
@@ -134,6 +142,14 @@ Shader "Llaneritos/Agua VR"
                 // Brillo del sol sobre las olas
                 Light luz = GetMainLight();
                 half brillo = pow(saturate(dot(R, luz.direction)), _SolDureza) * _SolIntensidad;
+
+                // Reflejo de la linea de arboles de la orilla: franja oscura cerca del horizonte del reflejo.
+                // Solo al mirar en contra del sol (hacia el sol manda el brillo y se deja igual).
+                half2 miradaH = normalize(-V.xz + 0.0001);
+                half2 solH = normalize(luz.direction.xz + 0.0001);
+                half contraSol = saturate(-dot(miradaH, solH));
+                half franja = (1.0 - smoothstep(0.0, _AlturaArboles, altura)) * _ReflejoArboles * contraSol;
+                cielo = lerp(cielo, _ColorArboles.rgb, franja);
 
                 half3 color = lerp(cuerpo, cielo, fres) + luz.color * brillo;
                 half alfa = saturate(lerp(_Opacidad, 1.0, fres) + brillo);
