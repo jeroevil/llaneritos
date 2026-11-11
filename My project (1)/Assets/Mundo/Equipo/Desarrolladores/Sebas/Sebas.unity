@@ -364,9 +364,17 @@ PrefabInstance:
     m_RemovedGameObjects:
     - {fileID: -8700617353114198275, guid: 0a3abc7ccb8fb274ca4310275d06c29a, type: 3}
     - {fileID: 65702495048144492, guid: 0a3abc7ccb8fb274ca4310275d06c29a, type: 3}
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 0a3abc7ccb8fb274ca4310275d06c29a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1032243772}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 0a3abc7ccb8fb274ca4310275d06c29a, type: 3}
+--- !u!4 &7700002 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 0a3abc7ccb8fb274ca4310275d06c29a, type: 3}
+  m_PrefabInstance: {fileID: 7700001}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &7700010
 GameObject:
   m_ObjectHideFlags: 0
@@ -3446,9 +3454,17 @@ PrefabInstance:
     m_RemovedGameObjects:
     - {fileID: -8700617353114198275, guid: a5c2e9b71100c814885a51984835cbe7, type: 3}
     - {fileID: 65702495048144492, guid: a5c2e9b71100c814885a51984835cbe7, type: 3}
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: a5c2e9b71100c814885a51984835cbe7, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 923086431}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a5c2e9b71100c814885a51984835cbe7, type: 3}
+--- !u!4 &66269809 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a5c2e9b71100c814885a51984835cbe7, type: 3}
+  m_PrefabInstance: {fileID: 66269808}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &68320073
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -10936,6 +10952,114 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
+--- !u!1 &250106032
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 250106033}
+  - component: {fileID: 250106037}
+  - component: {fileID: 250106036}
+  - component: {fileID: 250106035}
+  - component: {fileID: 250106034}
+  m_Layer: 0
+  m_Name: Zona apuntar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &250106033
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 250106032}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.6992618, y: -0.04802515, z: 0.010645374, w: 0.7131713}
+  m_LocalPosition: {x: -0.13695633, y: 2.0937107, z: -1.8707781}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1961325258}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &250106034
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 250106032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9747fa9d12107834abb223a37c6b03fd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CartelAlApuntar
+  cartel: {fileID: 7700010}
+  interactable: {fileID: 250106035}
+  duracionFundido: 0.15
+  escalaOculto: 0.85
+  retardoOcultar: 0.1
+  mostrarSiempre: 0
+--- !u!114 &250106035
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 250106032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb86ba9d4c5126e48bfef9b0c9550e9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.RayInteractable
+  _interactorFilters: []
+  _maxInteractors: -1
+  _maxSelectingInteractors: -1
+  _data: {fileID: 0}
+  _pointableElement: {fileID: 0}
+  _surface: {fileID: 250106036}
+  _selectSurface: {fileID: 0}
+  _movementProvider: {fileID: 0}
+  _tiebreakerScore: 0
+--- !u!114 &250106036
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 250106032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2140d2b457bea84881488302059889b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.Surfaces.ColliderSurface
+  _collider: {fileID: 250106037}
+--- !u!65 &250106037
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 250106032}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 5.0264306, y: 12.930354, z: 9.635429}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &252816121
 GameObject:
   m_ObjectHideFlags: 0
@@ -33864,6 +33988,114 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
+--- !u!1 &923086430
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 923086431}
+  - component: {fileID: 923086435}
+  - component: {fileID: 923086434}
+  - component: {fileID: 923086433}
+  - component: {fileID: 923086432}
+  m_Layer: 0
+  m_Name: Zona apuntar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &923086431
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 923086430}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.7146215, y: -0, z: -0, w: 0.69951135}
+  m_LocalPosition: {x: 0, y: 1.3510482, z: -0.14846522}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 66269809}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &923086432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 923086430}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9747fa9d12107834abb223a37c6b03fd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CartelAlApuntar
+  cartel: {fileID: 7700020}
+  interactable: {fileID: 923086433}
+  duracionFundido: 0.15
+  escalaOculto: 0.85
+  retardoOcultar: 0.1
+  mostrarSiempre: 0
+--- !u!114 &923086433
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 923086430}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb86ba9d4c5126e48bfef9b0c9550e9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.RayInteractable
+  _interactorFilters: []
+  _maxInteractors: -1
+  _maxSelectingInteractors: -1
+  _data: {fileID: 0}
+  _pointableElement: {fileID: 0}
+  _surface: {fileID: 923086434}
+  _selectSurface: {fileID: 0}
+  _movementProvider: {fileID: 0}
+  _tiebreakerScore: 0
+--- !u!114 &923086434
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 923086430}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2140d2b457bea84881488302059889b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.Surfaces.ColliderSurface
+  _collider: {fileID: 923086435}
+--- !u!65 &923086435
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 923086430}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 2.2089198, y: 7.396596, z: 4.677469}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &926602122
 GameObject:
   m_ObjectHideFlags: 0
@@ -37806,6 +38038,114 @@ Transform:
   - {fileID: 1263635123}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1032243771
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1032243772}
+  - component: {fileID: 1032243776}
+  - component: {fileID: 1032243775}
+  - component: {fileID: 1032243774}
+  - component: {fileID: 1032243773}
+  m_Layer: 0
+  m_Name: Zona apuntar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1032243772
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032243771}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.49999955, y: 0.5000005, z: -0.5000004, w: 0.4999996}
+  m_LocalPosition: {x: 2.03719, y: 0.09398707, z: -0.0000035206226}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7700002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1032243773
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032243771}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9747fa9d12107834abb223a37c6b03fd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CartelAlApuntar
+  cartel: {fileID: 7700030}
+  interactable: {fileID: 1032243774}
+  duracionFundido: 0.15
+  escalaOculto: 0.85
+  retardoOcultar: 0.1
+  mostrarSiempre: 0
+--- !u!114 &1032243774
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032243771}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb86ba9d4c5126e48bfef9b0c9550e9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.RayInteractable
+  _interactorFilters: []
+  _maxInteractors: -1
+  _maxSelectingInteractors: -1
+  _data: {fileID: 0}
+  _pointableElement: {fileID: 0}
+  _surface: {fileID: 1032243775}
+  _selectSurface: {fileID: 0}
+  _movementProvider: {fileID: 0}
+  _tiebreakerScore: 0
+--- !u!114 &1032243775
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032243771}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2140d2b457bea84881488302059889b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Oculus.Interaction::Oculus.Interaction.Surfaces.ColliderSurface
+  _collider: {fileID: 1032243776}
+--- !u!65 &1032243776
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032243771}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 6.0425406, y: 16.492722, z: 5.027655}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1032463956
 GameObject:
   m_ObjectHideFlags: 0
@@ -81503,9 +81843,17 @@ PrefabInstance:
     m_RemovedGameObjects:
     - {fileID: -8700617353114198275, guid: b60ab8f8f3c598c47b740af56ac6109a, type: 3}
     - {fileID: 65702495048144492, guid: b60ab8f8f3c598c47b740af56ac6109a, type: 3}
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: b60ab8f8f3c598c47b740af56ac6109a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 250106033}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b60ab8f8f3c598c47b740af56ac6109a, type: 3}
+--- !u!4 &1961325258 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: b60ab8f8f3c598c47b740af56ac6109a, type: 3}
+  m_PrefabInstance: {fileID: 1961325257}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1963282510
 GameObject:
   m_ObjectHideFlags: 0
