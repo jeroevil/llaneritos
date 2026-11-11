@@ -62,6 +62,9 @@ public class MejoraRed : MonoBehaviour
     [Tooltip("Boton de teletransporte cuyo destino es 'teletransporte decicion hermanos' (la Cuarta flecha). " +
              "Al aparecer la mejora lleva ahi al jugador; al presionar Continuar lo regresa a donde estaba. Vacio = no se teletransporta.")]
     [SerializeField] PuntoTeletransporte puntoDecision;
+    [Tooltip("Boton de teletransporte cuyo destino es la red de pesca. Al presionar Continuar lleva ahi al jugador. " +
+             "Vacio = lo regresa a donde estaba antes de la decision.")]
+    [SerializeField] PuntoTeletransporte puntoRed;
 
     [Header("Hermanos en la decision")]
     [Tooltip("Animators de los hermanos que esperan junto a la decision (los 'dialogos de mejorar red'). " +
@@ -198,7 +201,8 @@ public class MejoraRed : MonoBehaviour
         mejoraPendiente = true;
         HayMejoraDisponible = false;
         PonerHermanosHablando(false);
-        if (puntoDecision != null) puntoDecision.VolverAlOrigen();
+        if (puntoRed != null) puntoRed.Teletransportar();
+        else if (puntoDecision != null) puntoDecision.VolverAlOrigen();
         if (objetoBoton != null) objetoBoton.SetActive(false);
         ActualizarBotonFinalizar(false);
         Debug.Log($"[MejoraRed] Mejora al nivel {NivelActual + 1} solicitada" + (RedEnReposo() ? "." : " (se aplica cuando la red vuelva a la orilla)."), this);

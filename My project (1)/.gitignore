@@ -104,3 +104,8 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Clips de video del storyboard (se quedan solo en local)
+/[Aa]ssets/[Ss]ilbon/Clips storyboard/
+/[Aa]ssets/[Ss]ilbon/Clips storyboard.meta
+/[Aa]ssets/[Ss]ilbon/WhatsApp Video*

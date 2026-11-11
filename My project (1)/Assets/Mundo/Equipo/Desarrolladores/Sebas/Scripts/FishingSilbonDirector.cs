@@ -129,6 +129,9 @@ public class FishingSilbonDirector : MonoBehaviour
     [Tooltip("Punto en la superficie del agua donde emerge el Silbon. Si esta vacio, emerge en 'Punto Inicio Persecucion' sin subir (comportamiento anterior).")]
     public Transform puntoEmergencia;
 
+    [Tooltip("Saco del Silbon (malla hija). Se oculta mientras emerge del agua y reaparece a oscuras, en el segundo parpadeo, antes de la persecucion.")]
+    public GameObject sacoDelSilbon;
+
     [Tooltip("Metros por debajo del punto de emergencia desde donde empieza a subir.")]
     [Min(0f)] public float profundidadEmergencia = 2.5f;
 
@@ -728,6 +731,7 @@ public class FishingSilbonDirector : MonoBehaviour
             }
 
             silbonEnemigo.SetActive(true);
+            if (sacoDelSilbon != null) sacoDelSilbon.SetActive(false); // emerge sin el saco
 
             // El NavMeshAgent se activa DESPUES de emerger
             if (navMeshAgentSilbon != null)
@@ -811,6 +815,7 @@ public class FishingSilbonDirector : MonoBehaviour
 
             posicionPersecucion = CalcularAparicionCercana();
             silbonEnemigo.transform.localScale = escalaOriginalSilbon; // A oscuras vuelve a su tamaño normal
+            if (sacoDelSilbon != null) sacoDelSilbon.SetActive(true);
             silbonEnemigo.transform.position = posicionPersecucion;
             Vector3 haciaJugador = jugadorOcular.position - posicionPersecucion;
             haciaJugador.y = 0f;
@@ -827,6 +832,8 @@ public class FishingSilbonDirector : MonoBehaviour
             separacionAparicion.y = 0f;
             Debug.Log($"[Silbon] Segundo parpadeo: aparece a {separacionAparicion.magnitude:F1}m del jugador.");
         }
+
+        if (sacoDelSilbon != null) sacoDelSilbon.SetActive(true);
 
         if (audioManager != null)
             audioManager.StartChaseMusic();
